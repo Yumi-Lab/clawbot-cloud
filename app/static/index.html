@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clawbot Cloud — Yumi Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:           #0a0908;
+      --bg-card:      #0f0e0c;
+      --border:       #1e1b14;
+      --border-focus: #ffb300;
+      --text:         #e8d5a3;
+      --text-dim:     #8a7a58;
+      --text-muted:   #4a3e28;
+      --accent:       #ffb300;
+      --accent-soft:  rgba(255,179,0,0.07);
+      --danger:       #ff5533;
+      --success:      #44dd88;
+      --font:         'IBM Plex Mono', monospace;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 13px;
+      line-height: 1.6;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg, transparent, transparent 2px,
+        rgba(0,0,0,0.025) 2px, rgba(0,0,0,0.025) 4px
+      );
+      pointer-events: none;
+      z-index: 999;
+    }
+
+    .container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      width: 900px;
+      height: 560px;
+      border: 1px solid var(--border);
+      box-shadow: 0 0 60px rgba(255,179,0,0.04);
+    }
+
+    /* ── Brand panel ── */
+    .brand-panel {
+      padding: 44px 48px;
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      background: var(--bg-card);
+      position: relative;
+      overflow: hidden;
+    }
+    .brand-panel::before {
+      content: '';
+      position: absolute;
+      top: -80px; left: -80px;
+      width: 360px; height: 360px;
+      background: radial-gradient(circle, rgba(255,179,0,0.05) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .logo { font-size: 20px; font-weight: 600; letter-spacing: 0.15em; color: var(--accent); }
+    .logo-sub { font-size: 10px; letter-spacing: 0.2em; color: var(--text-muted); margin-top: 3px; text-transform: uppercase; }
+
+    .brand-mid { display: flex; flex-direction: column; gap: 20px; }
+    .brand-title { font-size: 26px; font-weight: 300; line-height: 1.3; }
+    .brand-title strong { color: var(--accent); font-weight: 600; }
+
+    .feature-list { list-style: none; display: flex; flex-direction: column; gap: 7px; }
+    .feature-list li { font-size: 11px; color: var(--text-dim); display: flex; align-items: center; gap: 8px; }
+    .feature-list li::before { content: '▸'; color: var(--accent); flex-shrink: 0; }
+
+    .plan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .plan-chip { border: 1px solid var(--border); padding: 10px 12px; }
+    .plan-chip .pname { font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--accent); font-weight: 500; }
+    .plan-chip .pprice { font-size: 18px; font-weight: 600; color: var(--text); margin-top: 2px; }
+    .plan-chip .ptokens { font-size: 10px; color: var(--text-dim); margin-top: 1px; }
+
+    /* ── Auth panel ── */
+    .auth-panel {
+      padding: 44px 48px;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+
+    .auth-header { display: flex; flex-direction: column; gap: 3px; }
+    .auth-title { font-size: 14px; font-weight: 500; letter-spacing: 0.1em; color: var(--text); }
+    .auth-sub { font-size: 10px; color: var(--text-dim); }
+
+    .tabs { display: flex; border-bottom: 1px solid var(--border); }
+    .tab {
+      background: none; border: none; border-bottom: 2px solid transparent;
+      color: var(--text-dim); font-family: var(--font); font-size: 10px;
+      letter-spacing: 0.15em; padding: 7px 16px 9px; cursor: pointer;
+      margin-bottom: -1px; transition: all 0.12s; text-transform: uppercase;
+    }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab:hover:not(.active) { color: var(--text); }
+
+    form { display: flex; flex-direction: column; gap: 14px; flex: 1; }
+
+    .field { display: flex; flex-direction: column; gap: 5px; }
+    label { font-size: 9px; letter-spacing: 0.18em; color: var(--text-dim); text-transform: uppercase; }
+
+    input, select {
+      background: var(--bg); border: 1px solid var(--border);
+      color: var(--text); font-family: var(--font); font-size: 13px;
+      padding: 9px 11px; outline: none; transition: border-color 0.12s; width: 100%;
+    }
+    input::placeholder { color: var(--text-muted); }
+    input:focus, select:focus { border-color: var(--border-focus); }
+    select option { background: var(--bg-card); }
+
+    .btn {
+      background: var(--accent); border: none; color: #0a0908;
+      font-family: var(--font); font-size: 11px; font-weight: 600;
+      letter-spacing: 0.18em; padding: 11px; cursor: pointer;
+      text-transform: uppercase; transition: opacity 0.12s; margin-top: auto;
+    }
+    .btn:hover { opacity: 0.88; }
+    .btn:active { opacity: 0.75; }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    .msg { font-size: 11px; padding: 7px 10px; border: 1px solid; display: none; }
+    .msg.error { color: var(--danger); border-color: var(--danger); background: rgba(255,85,51,0.05); display: block; }
+    .msg.success { color: var(--success); border-color: var(--success); background: rgba(68,221,136,0.05); display: block; }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Brand -->
+  <div class="brand-panel">
+    <div>
+      <div class="logo">◈ CLAWBOT</div>
+      <div class="logo-sub">Cloud Infrastructure — Yumi Lab</div>
+    </div>
+    <div class="brand-mid">
+      <div class="brand-title">
+        L'IA embarquée<br>pour votre <strong>Yumi</strong><br>hardware.
+      </div>
+      <ul class="feature-list">
+        <li>Smart Pi One &amp; SmartPad compatible</li>
+        <li>Anthropic Claude — modèles dernière génération</li>
+        <li>Provisionnement automatique des appareils</li>
+        <li>Quota de tokens géré côté cloud</li>
+      </ul>
+    </div>
+    <div class="plan-grid">
+      <div class="plan-chip">
+        <div class="pname">Particulier</div>
+        <div class="pprice">7,99 €</div>
+        <div class="ptokens">200 000 tokens / jour</div>
+      </div>
+      <div class="plan-chip">
+        <div class="pname">Pro</div>
+        <div class="pprice">24,99 €</div>
+        <div class="ptokens">2 000 000 tokens / jour</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auth -->
+  <div class="auth-panel">
+    <div class="auth-header">
+      <div class="auth-title">ACCÈS AU PORTAIL</div>
+      <div class="auth-sub">Gérez votre abonnement et vos appareils</div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" onclick="showTab('login')">Connexion</button>
+      <button class="tab" onclick="showTab('register')">Créer un compte</button>
+    </div>
+
+    <!-- Login -->
+    <form id="login-form" onsubmit="doLogin(event)">
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="login-email" placeholder="vous@domaine.com" required>
+      </div>
+      <div class="field">
+        <label>Mot de passe</label>
+        <input type="password" id="login-pwd" placeholder="••••••••" required>
+      </div>
+      <div class="msg" id="login-msg"></div>
+      <button class="btn" type="submit">Se connecter →</button>
+    </form>
+
+    <!-- Register -->
+    <form id="register-form" class="hidden" onsubmit="doRegister(event)">
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="reg-email" placeholder="vous@domaine.com" required>
+      </div>
+      <div class="field">
+        <label>Mot de passe</label>
+        <input type="password" id="reg-pwd" placeholder="8 caractères minimum" minlength="8" required>
+      </div>
+      <div class="field">
+        <label>Plan</label>
+        <select id="reg-plan">
+          <option value="particulier">Particulier — 7,99 €/mois — 200k tokens/jour</option>
+          <option value="pro">Pro — 24,99 €/mois — 2M tokens/jour</option>
+        </select>
+      </div>
+      <div class="msg" id="reg-msg"></div>
+      <button class="btn" type="submit">Créer mon compte →</button>
+    </form>
+  </div>
+
+</div>
+
+<script>
+  if (localStorage.getItem('clawbot_token')) window.location.href = '/dashboard';
+
+  function showTab(tab) {
+    document.querySelectorAll('.tab').forEach((t, i) => {
+      t.classList.toggle('active', (i === 0) === (tab === 'login'));
+    });
+    document.getElementById('login-form').classList.toggle('hidden', tab !== 'login');
+    document.getElementById('register-form').classList.toggle('hidden', tab !== 'register');
+  }
+
+  function showMsg(id, text, type) {
+    const el = document.getElementById(id);
+    el.className = 'msg ' + type;
+    el.textContent = text;
+  }
+
+  async function doLogin(e) {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type=submit]');
+    btn.disabled = true; btn.textContent = 'Connexion...';
+    try {
+      const r = await fetch('/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: document.getElementById('login-email').value,
+          password: document.getElementById('login-pwd').value,
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.detail || 'Erreur de connexion');
+      localStorage.setItem('clawbot_token', data.access_token);
+      localStorage.setItem('clawbot_plan', data.plan);
+      localStorage.setItem('clawbot_subkey', data.sub_key);
+      window.location.href = '/dashboard';
+    } catch (err) {
+      showMsg('login-msg', err.message, 'error');
+      btn.disabled = false; btn.textContent = 'Se connecter →';
+    }
+  }
+
+  async function doRegister(e) {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type=submit]');
+    btn.disabled = true; btn.textContent = 'Création...';
+    try {
+      const r = await fetch('/v1/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: document.getElementById('reg-email').value,
+          password: document.getElementById('reg-pwd').value,
+          plan: document.getElementById('reg-plan').value,
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.detail || 'Erreur de création');
+      localStorage.setItem('clawbot_token', data.access_token);
+      localStorage.setItem('clawbot_plan', data.plan);
+      localStorage.setItem('clawbot_subkey', data.sub_key);
+      window.location.href = '/dashboard';
+    } catch (err) {
+      showMsg('reg-msg', err.message, 'error');
+      btn.disabled = false; btn.textContent = 'Créer mon compte →';
+    }
+  }
+</script>
+</body>
+</html>

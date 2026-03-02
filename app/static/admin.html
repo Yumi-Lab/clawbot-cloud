@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clawbot — Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:           #0a0908;
+      --bg-card:      #0f0e0c;
+      --bg-input:     #080806;
+      --border:       #1e1b14;
+      --border-focus: #ffb300;
+      --text:         #e8d5a3;
+      --text-dim:     #8a7a58;
+      --text-muted:   #4a3e28;
+      --accent:       #ffb300;
+      --accent-soft:  rgba(255,179,0,0.07);
+      --danger:       #ff5533;
+      --success:      #44dd88;
+      --warn:         #ffaa00;
+      --font:         'IBM Plex Mono', monospace;
+    }
+
+    body {
+      background: var(--bg); color: var(--text); font-family: var(--font);
+      font-size: 13px; line-height: 1.5; min-height: 100vh;
+      display: flex; flex-direction: column;
+    }
+    body::after {
+      content: ''; position: fixed; inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.02) 2px, rgba(0,0,0,0.02) 4px);
+      pointer-events: none; z-index: 999;
+    }
+
+    /* ── Login overlay ── */
+    .login-overlay {
+      position: fixed; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--bg); z-index: 500;
+    }
+    .login-box {
+      width: 360px; border: 1px solid var(--border);
+      background: var(--bg-card); padding: 40px;
+      display: flex; flex-direction: column; gap: 20px;
+    }
+    .login-logo { font-size: 16px; font-weight: 600; letter-spacing: 0.12em; color: var(--accent); }
+    .login-title { font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--text-dim); }
+    .login-field { display: flex; flex-direction: column; gap: 5px; }
+    .login-field label { font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-muted); }
+    .login-field input {
+      background: var(--bg-input); border: 1px solid var(--border);
+      color: var(--text); font-family: var(--font); font-size: 13px;
+      padding: 9px 11px; outline: none; width: 100%; transition: border-color 0.12s;
+    }
+    .login-field input:focus { border-color: var(--border-focus); }
+    .btn-login {
+      background: var(--accent); border: none; color: #0a0908;
+      font-family: var(--font); font-size: 11px; font-weight: 600;
+      letter-spacing: 0.15em; padding: 11px; cursor: pointer; text-transform: uppercase;
+      transition: opacity 0.12s;
+    }
+    .btn-login:hover { opacity: 0.88; }
+    .login-err { font-size: 11px; color: var(--danger); display: none; }
+
+    /* ── App ── */
+    #app { display: none; flex-direction: column; flex: 1; }
+
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 32px; height: 52px; border-bottom: 1px solid var(--border);
+      background: var(--bg-card); position: sticky; top: 0; z-index: 100; flex-shrink: 0;
+    }
+    .logo { font-size: 14px; font-weight: 600; letter-spacing: 0.12em; color: var(--accent); }
+    .logo-admin { font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--text-muted); margin-left: 10px; }
+    .header-left { display: flex; align-items: baseline; gap: 4px; }
+    .header-right { display: flex; align-items: center; gap: 16px; }
+    .last-refresh { font-size: 10px; color: var(--text-muted); }
+    .btn-refresh {
+      background: none; border: 1px solid var(--border); color: var(--text-dim);
+      font-family: var(--font); font-size: 10px; letter-spacing: 0.1em;
+      padding: 5px 12px; cursor: pointer; transition: all 0.12s; text-transform: uppercase;
+    }
+    .btn-refresh:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-logout {
+      background: none; border: 1px solid var(--border); color: var(--text-dim);
+      font-family: var(--font); font-size: 10px; letter-spacing: 0.1em;
+      padding: 5px 12px; cursor: pointer; transition: all 0.12s; text-transform: uppercase;
+    }
+    .btn-logout:hover { border-color: var(--danger); color: var(--danger); }
+
+    main { flex: 1; padding: 28px 32px; display: flex; flex-direction: column; gap: 24px; max-width: 1400px; width: 100%; margin: 0 auto; }
+
+    /* ── Stats row ── */
+    .stats-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+    .stat-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      padding: 16px 18px; display: flex; flex-direction: column; gap: 6px;
+    }
+    .stat-label { font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-muted); }
+    .stat-value { font-size: 28px; font-weight: 500; color: var(--text); line-height: 1; }
+    .stat-sub { font-size: 10px; color: var(--text-dim); }
+
+    /* ── Tabs ── */
+    .tabs { display: flex; border-bottom: 1px solid var(--border); }
+    .tab {
+      background: none; border: none; border-bottom: 2px solid transparent;
+      color: var(--text-dim); font-family: var(--font); font-size: 10px;
+      letter-spacing: 0.15em; padding: 8px 20px 10px; cursor: pointer;
+      margin-bottom: -1px; transition: all 0.12s; text-transform: uppercase;
+    }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab:hover:not(.active) { color: var(--text); }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* ── Search ── */
+    .search-row { display: flex; align-items: center; gap: 10px; padding: 12px 0; }
+    .search-input {
+      background: var(--bg-input); border: 1px solid var(--border); color: var(--text);
+      font-family: var(--font); font-size: 12px; padding: 7px 12px; outline: none;
+      width: 280px; transition: border-color 0.12s;
+    }
+    .search-input:focus { border-color: var(--border-focus); }
+    .search-input::placeholder { color: var(--text-muted); }
+    .row-count { font-size: 10px; color: var(--text-muted); }
+
+    /* ── Table ── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase;
+      color: var(--text-muted); text-align: left; padding: 8px 12px;
+      border-bottom: 1px solid var(--border); font-weight: 400; white-space: nowrap;
+    }
+    td {
+      padding: 9px 12px; border-bottom: 1px solid rgba(30,27,20,0.5);
+      font-size: 12px; color: var(--text-dim); vertical-align: middle;
+    }
+    tr:hover td { background: var(--accent-soft); }
+    .empty-row td { color: var(--text-muted); font-style: italic; text-align: center; padding: 24px; }
+
+    /* Token bar inline */
+    .tok-cell { display: flex; flex-direction: column; gap: 3px; min-width: 120px; }
+    .tok-bar { height: 3px; background: var(--border); }
+    .tok-fill { height: 100%; background: var(--accent); }
+    .tok-fill.warn { background: var(--warn); }
+    .tok-fill.danger { background: var(--danger); }
+
+    .badge {
+      display: inline-block; font-size: 9px; font-weight: 600;
+      letter-spacing: 0.1em; padding: 2px 7px;
+      text-transform: uppercase; border: 1px solid;
+    }
+    .badge.ok { color: var(--success); border-color: var(--success); background: rgba(68,221,136,0.06); }
+    .badge.ko { color: var(--danger); border-color: var(--danger); background: rgba(255,85,51,0.06); }
+    .badge.particulier { color: var(--accent); border-color: rgba(255,179,0,0.4); }
+    .badge.pro { color: #cc88ff; border-color: rgba(204,136,255,0.4); }
+    .badge.free { color: var(--text-dim); border-color: var(--border); }
+
+    .status-dot { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; }
+    .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .dot.ok { background: var(--success); box-shadow: 0 0 4px var(--success); }
+    .dot.ko { background: var(--danger); }
+    .dot.na { background: var(--text-muted); }
+  </style>
+</head>
+<body>
+
+<!-- Login overlay -->
+<div class="login-overlay" id="login-overlay">
+  <div class="login-box">
+    <div class="login-logo">◈ CLAWBOT ADMIN</div>
+    <div class="login-title">Accès réservé à l'administrateur</div>
+    <div class="login-field">
+      <label>Secret admin</label>
+      <input type="password" id="admin-secret" placeholder="••••••••••••" onkeydown="if(event.key==='Enter')doAdminLogin()">
+    </div>
+    <div class="login-err" id="admin-err">Secret invalide</div>
+    <button class="btn-login" onclick="doAdminLogin()">Accéder →</button>
+  </div>
+</div>
+
+<!-- App -->
+<div id="app" style="display:none;flex-direction:column;flex:1">
+
+  <header>
+    <div class="header-left">
+      <div class="logo">◈ CLAWBOT CLOUD</div>
+      <span class="logo-admin">— Administration</span>
+    </div>
+    <div class="header-right">
+      <span class="last-refresh" id="last-refresh">—</span>
+      <button class="btn-refresh" onclick="loadAll()">↻ Rafraîchir</button>
+      <button class="btn-logout" onclick="adminLogout()">Déconnexion</button>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">Utilisateurs</div>
+        <div class="stat-value" id="stat-users">—</div>
+        <div class="stat-sub">comptes créés</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Abonnements actifs</div>
+        <div class="stat-value" id="stat-subs">—</div>
+        <div class="stat-sub">sub_active = true</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Appareils</div>
+        <div class="stat-value" id="stat-devices">—</div>
+        <div class="stat-sub">enregistrés</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">En ligne (24h)</div>
+        <div class="stat-value" id="stat-online">—</div>
+        <div class="stat-sub">heartbeat récent</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Tokens aujourd'hui</div>
+        <div class="stat-value" id="stat-tokens">—</div>
+        <div class="stat-sub">total tous comptes</div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div>
+      <div class="tabs">
+        <button class="tab active" onclick="showTab('users')">Utilisateurs</button>
+        <button class="tab" onclick="showTab('devices')">Appareils</button>
+      </div>
+
+      <!-- Users tab -->
+      <div class="tab-content active" id="tab-users">
+        <div class="search-row">
+          <input class="search-input" id="user-search" placeholder="Filtrer par email..."
+            oninput="filterUsers()">
+          <span class="row-count" id="user-count">—</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Plan</th>
+                <th>Abonnement</th>
+                <th>Tokens aujourd'hui</th>
+                <th>Appareils</th>
+                <th>Clé (tronquée)</th>
+                <th>Créé le</th>
+              </tr>
+            </thead>
+            <tbody id="users-tbody">
+              <tr class="empty-row"><td colspan="7">Chargement...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Devices tab -->
+      <div class="tab-content" id="tab-devices">
+        <div class="search-row">
+          <input class="search-input" id="device-search" placeholder="Filtrer par ID, board, owner..."
+            oninput="filterDevices()">
+          <span class="row-count" id="device-count">—</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID Appareil</th>
+                <th>Propriétaire</th>
+                <th>Board</th>
+                <th>Firmware</th>
+                <th>IP</th>
+                <th>Dernière vue</th>
+                <th>Provisionné</th>
+                <th>PicoClaw</th>
+                <th>Core</th>
+              </tr>
+            </thead>
+            <tbody id="devices-tbody">
+              <tr class="empty-row"><td colspan="9">Chargement...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  let adminSecret = sessionStorage.getItem('clawbot_admin_secret') || '';
+  let allUsers = [];
+  let allDevices = [];
+
+  // Auto-login if secret in session
+  if (adminSecret) tryShowApp();
+
+  function doAdminLogin() {
+    const s = document.getElementById('admin-secret').value.trim();
+    if (!s) return;
+    adminSecret = s;
+    tryShowApp();
+  }
+
+  async function tryShowApp() {
+    try {
+      const r = await fetch('/v1/admin/stats', {
+        headers: { 'x-admin-secret': adminSecret }
+      });
+      if (!r.ok) throw new Error();
+      sessionStorage.setItem('clawbot_admin_secret', adminSecret);
+      document.getElementById('login-overlay').style.display = 'none';
+      document.getElementById('app').style.display = 'flex';
+      loadAll();
+    } catch {
+      sessionStorage.removeItem('clawbot_admin_secret');
+      const err = document.getElementById('admin-err');
+      if (err) err.style.display = 'block';
+    }
+  }
+
+  function adminLogout() {
+    sessionStorage.removeItem('clawbot_admin_secret');
+    adminSecret = '';
+    document.getElementById('login-overlay').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('admin-secret').value = '';
+  }
+
+  function showTab(name) {
+    document.querySelectorAll('.tab').forEach((t, i) => {
+      t.classList.toggle('active', (i === 0) === (name === 'users'));
+    });
+    document.getElementById('tab-users').classList.toggle('active', name === 'users');
+    document.getElementById('tab-devices').classList.toggle('active', name === 'devices');
+  }
+
+  async function loadAll() {
+    await Promise.all([loadStats(), loadUsers(), loadDevices()]);
+    document.getElementById('last-refresh').textContent =
+      'Mis à jour à ' + new Date().toLocaleTimeString('fr-FR');
+  }
+
+  async function loadStats() {
+    try {
+      const r = await fetch('/v1/admin/stats', { headers: { 'x-admin-secret': adminSecret } });
+      const d = await r.json();
+      document.getElementById('stat-users').textContent = d.total_users ?? '—';
+      document.getElementById('stat-subs').textContent = d.active_subs ?? '—';
+      document.getElementById('stat-devices').textContent = d.total_devices ?? '—';
+      document.getElementById('stat-online').textContent = d.online_devices ?? '—';
+      document.getElementById('stat-tokens').textContent = (d.tokens_today || 0).toLocaleString('fr-FR');
+    } catch (e) { console.error('stats:', e); }
+  }
+
+  async function loadUsers() {
+    try {
+      const r = await fetch('/v1/admin/users', { headers: { 'x-admin-secret': adminSecret } });
+      const d = await r.json();
+      allUsers = d.users || [];
+      renderUsers(allUsers);
+    } catch (e) { console.error('users:', e); }
+  }
+
+  function renderUsers(users) {
+    const tbody = document.getElementById('users-tbody');
+    document.getElementById('user-count').textContent = users.length + ' utilisateur' + (users.length !== 1 ? 's' : '');
+    if (!users.length) {
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="7">Aucun utilisateur</td></tr>';
+      return;
+    }
+    tbody.innerHTML = users.map(u => {
+      const pct = u.tokens_per_day ? Math.min(100, Math.round(u.tokens_used_today / u.tokens_per_day * 100)) : 0;
+      const barClass = pct > 80 ? 'danger' : pct > 50 ? 'warn' : '';
+      const keyShort = u.sub_key ? u.sub_key.substring(0, 12) + '...' : '—';
+      const date = u.created_at ? new Date(u.created_at).toLocaleDateString('fr-FR') : '—';
+      return `<tr>
+        <td>${escHtml(u.email)}</td>
+        <td><span class="badge ${u.plan}">${u.plan}</span></td>
+        <td><span class="badge ${u.sub_active ? 'ok' : 'ko'}">${u.sub_active ? 'ACTIF' : 'INACTIF'}</span></td>
+        <td>
+          <div class="tok-cell">
+            <span style="font-size:11px">${u.tokens_used_today.toLocaleString('fr-FR')} / ${u.tokens_per_day.toLocaleString('fr-FR')}</span>
+            <div class="tok-bar"><div class="tok-fill ${barClass}" style="width:${pct}%"></div></div>
+          </div>
+        </td>
+        <td style="text-align:center">${u.device_count}</td>
+        <td style="color:var(--text-muted);font-size:11px">${keyShort}</td>
+        <td style="font-size:11px;color:var(--text-muted)">${date}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function filterUsers() {
+    const q = document.getElementById('user-search').value.toLowerCase();
+    renderUsers(q ? allUsers.filter(u => u.email.toLowerCase().includes(q)) : allUsers);
+  }
+
+  async function loadDevices() {
+    try {
+      const r = await fetch('/v1/admin/devices', { headers: { 'x-admin-secret': adminSecret } });
+      const d = await r.json();
+      allDevices = d.devices || [];
+      renderDevices(allDevices);
+    } catch (e) { console.error('devices:', e); }
+  }
+
+  function renderDevices(devices) {
+    const tbody = document.getElementById('devices-tbody');
+    document.getElementById('device-count').textContent = devices.length + ' appareil' + (devices.length !== 1 ? 's' : '');
+    if (!devices.length) {
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="9">Aucun appareil</td></tr>';
+      return;
+    }
+    tbody.innerHTML = devices.map(d => {
+      const seen = d.last_seen_at ? relTime(d.last_seen_at) : '—';
+      const online = d.last_seen_at && (Date.now() - new Date(d.last_seen_at)) < 600000; // < 10min
+      const dot = s => `<span class="status-dot"><span class="dot ${s === 'active' ? 'ok' : s ? 'ko' : 'na'}"></span>${s || '—'}</span>`;
+      return `<tr>
+        <td>
+          <span class="status-dot">
+            <span class="dot ${online ? 'ok' : 'na'}"></span>
+          </span>
+          <span style="font-size:11px;color:var(--text-muted)">${d.device_id}</span>
+        </td>
+        <td style="font-size:11px">${d.owner ? escHtml(d.owner) : '<span style="color:var(--text-muted)">non lié</span>'}</td>
+        <td>${d.board || '—'}</td>
+        <td>${d.firmware || '—'}</td>
+        <td>${d.last_ip || '—'}</td>
+        <td style="font-size:11px">${seen}</td>
+        <td><span class="badge ${d.provisioned ? 'ok' : 'ko'}">${d.provisioned ? 'OUI' : 'NON'}</span></td>
+        <td>${dot(d.picoclaw_status)}</td>
+        <td>${dot(d.core_status)}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function filterDevices() {
+    const q = document.getElementById('device-search').value.toLowerCase();
+    renderDevices(q ? allDevices.filter(d =>
+      d.device_id.toLowerCase().includes(q) ||
+      (d.board || '').toLowerCase().includes(q) ||
+      (d.owner || '').toLowerCase().includes(q)
+    ) : allDevices);
+  }
+
+  function relTime(iso) {
+    const diff = Math.floor((Date.now() - new Date(iso)) / 1000);
+    if (diff < 60) return diff + 's';
+    if (diff < 3600) return Math.floor(diff/60) + 'min';
+    if (diff < 86400) return Math.floor(diff/3600) + 'h';
+    return Math.floor(diff/86400) + 'j';
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // Auto-refresh every 60s
+  setInterval(() => { if (adminSecret && document.getElementById('app').style.display !== 'none') loadAll(); }, 60000);
+</script>
+</body>
+</html>

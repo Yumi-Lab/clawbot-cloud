@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clawbot — Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:           #0a0908;
+      --bg-card:      #0f0e0c;
+      --bg-input:     #080806;
+      --border:       #1e1b14;
+      --border-focus: #ffb300;
+      --text:         #e8d5a3;
+      --text-dim:     #8a7a58;
+      --text-muted:   #4a3e28;
+      --accent:       #ffb300;
+      --accent-soft:  rgba(255,179,0,0.07);
+      --danger:       #ff5533;
+      --success:      #44dd88;
+      --warn:         #ffaa00;
+      --font:         'IBM Plex Mono', monospace;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 13px;
+      line-height: 1.5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.02) 2px, rgba(0,0,0,0.02) 4px);
+      pointer-events: none; z-index: 999;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 32px; height: 52px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-card);
+      position: sticky; top: 0; z-index: 100;
+      flex-shrink: 0;
+    }
+    .logo { font-size: 14px; font-weight: 600; letter-spacing: 0.12em; color: var(--accent); }
+    .header-right { display: flex; align-items: center; gap: 20px; }
+    .user-email { font-size: 11px; color: var(--text-dim); }
+    .plan-badge {
+      font-size: 9px; font-weight: 600; letter-spacing: 0.15em;
+      padding: 3px 8px; border: 1px solid var(--accent);
+      color: var(--accent); text-transform: uppercase;
+    }
+    .btn-logout {
+      background: none; border: 1px solid var(--border);
+      color: var(--text-dim); font-family: var(--font); font-size: 10px;
+      letter-spacing: 0.1em; padding: 5px 12px; cursor: pointer;
+      transition: all 0.12s; text-transform: uppercase;
+    }
+    .btn-logout:hover { border-color: var(--danger); color: var(--danger); }
+
+    /* ── Main ── */
+    main { flex: 1; padding: 28px 32px; display: flex; flex-direction: column; gap: 24px; max-width: 1200px; width: 100%; margin: 0 auto; }
+
+    /* ── Cards row ── */
+    .cards { display: grid; grid-template-columns: 1.6fr 1fr 1fr; gap: 12px; }
+    .card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      padding: 18px 20px; display: flex; flex-direction: column; gap: 10px;
+    }
+    .card-label { font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--text-muted); }
+
+    /* Sub key */
+    .key-row { display: flex; align-items: center; gap: 8px; }
+    .key-value {
+      font-size: 12px; color: var(--text-dim); flex: 1;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .btn-sm {
+      background: none; border: 1px solid var(--border);
+      color: var(--text-dim); font-family: var(--font); font-size: 9px;
+      letter-spacing: 0.1em; padding: 4px 8px; cursor: pointer;
+      transition: all 0.12s; text-transform: uppercase; white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .btn-sm:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-sm.copied { border-color: var(--success); color: var(--success); }
+
+    /* Token usage */
+    .token-count { font-size: 20px; font-weight: 500; color: var(--text); }
+    .token-limit { font-size: 11px; color: var(--text-dim); }
+    .progress-track { height: 3px; background: var(--border); position: relative; margin-top: 4px; }
+    .progress-fill { height: 100%; background: var(--accent); transition: width 0.4s ease; }
+    .progress-fill.warn { background: var(--warn); }
+    .progress-fill.danger { background: var(--danger); }
+    .token-pct { font-size: 10px; color: var(--text-dim); }
+
+    /* Model */
+    .model-name { font-size: 16px; font-weight: 500; color: var(--text); }
+    .model-sub { font-size: 11px; color: var(--text-dim); }
+
+    /* ── Section ── */
+    .section { display: flex; flex-direction: column; gap: 12px; }
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding-bottom: 8px; border-bottom: 1px solid var(--border);
+    }
+    .section-title { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--text-dim); }
+
+    .btn-action {
+      background: none; border: 1px solid var(--border);
+      color: var(--text-dim); font-family: var(--font); font-size: 10px;
+      letter-spacing: 0.1em; padding: 5px 12px; cursor: pointer;
+      transition: all 0.12s; text-transform: uppercase;
+    }
+    .btn-action:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* Activate input row */
+    .activate-row {
+      display: flex; gap: 8px; align-items: center;
+      padding: 12px 14px; background: var(--accent-soft); border: 1px solid var(--border);
+    }
+    .activate-row input {
+      flex: 1; background: var(--bg-input); border: 1px solid var(--border);
+      color: var(--text); font-family: var(--font); font-size: 12px;
+      padding: 7px 10px; outline: none; transition: border-color 0.12s;
+    }
+    .activate-row input:focus { border-color: var(--border-focus); }
+    .activate-row input::placeholder { color: var(--text-muted); }
+    .btn-confirm {
+      background: var(--accent); border: none; color: #0a0908;
+      font-family: var(--font); font-size: 10px; font-weight: 600;
+      letter-spacing: 0.12em; padding: 8px 16px; cursor: pointer; text-transform: uppercase;
+    }
+    .btn-cancel {
+      background: none; border: none; color: var(--text-muted);
+      font-family: var(--font); font-size: 10px; padding: 8px; cursor: pointer;
+    }
+    .activate-msg { font-size: 11px; color: var(--text-dim); }
+
+    /* Table */
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase;
+      color: var(--text-muted); text-align: left; padding: 8px 12px;
+      border-bottom: 1px solid var(--border); font-weight: 400;
+    }
+    td {
+      padding: 10px 12px; border-bottom: 1px solid rgba(30,27,20,0.5);
+      font-size: 12px; color: var(--text-dim);
+      vertical-align: middle;
+    }
+    tr:hover td { background: var(--accent-soft); }
+    .empty-row td { color: var(--text-muted); font-style: italic; text-align: center; padding: 24px; }
+
+    .status-dot {
+      display: inline-flex; align-items: center; gap: 5px; font-size: 11px;
+    }
+    .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .dot.ok { background: var(--success); }
+    .dot.ko { background: var(--danger); }
+    .dot.na { background: var(--text-muted); }
+
+    /* ── Chat section ── */
+    .chat-section {
+      display: flex; flex-direction: column; gap: 12px;
+      background: var(--bg-card); border: 1px solid var(--border);
+      padding: 0; overflow: hidden;
+    }
+    .chat-header {
+      padding: 12px 18px; border-bottom: 1px solid var(--border);
+      font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--text-dim);
+    }
+    .chat-messages {
+      height: 300px; overflow-y: auto; padding: 16px 18px;
+      display: flex; flex-direction: column; gap: 14px;
+      scroll-behavior: smooth;
+    }
+    .chat-messages::-webkit-scrollbar { width: 4px; }
+    .chat-messages::-webkit-scrollbar-track { background: transparent; }
+    .chat-messages::-webkit-scrollbar-thumb { background: var(--border); }
+
+    .msg-wrap { display: flex; flex-direction: column; gap: 3px; }
+    .msg-wrap.user { align-items: flex-end; }
+    .msg-role { font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); }
+    .msg-bubble {
+      max-width: 80%; padding: 10px 14px; font-size: 12px; line-height: 1.6;
+      white-space: pre-wrap; word-break: break-word;
+    }
+    .msg-wrap.user .msg-bubble { background: var(--accent-soft); border: 1px solid rgba(255,179,0,0.2); color: var(--text); }
+    .msg-wrap.assistant .msg-bubble { background: rgba(255,255,255,0.02); border: 1px solid var(--border); color: var(--text-dim); }
+    .msg-wrap.assistant .msg-role { color: var(--accent); }
+
+    .typing-indicator { display: flex; align-items: center; gap: 4px; padding: 4px 0; }
+    .typing-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--text-muted); animation: blink 1.2s infinite; }
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes blink { 0%,100% { opacity: 0.2; } 50% { opacity: 1; } }
+
+    .chat-empty { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 11px; font-style: italic; }
+
+    .chat-input-row {
+      display: flex; border-top: 1px solid var(--border);
+    }
+    .chat-input {
+      flex: 1; background: transparent; border: none;
+      color: var(--text); font-family: var(--font); font-size: 13px;
+      padding: 14px 18px; outline: none; resize: none;
+    }
+    .chat-input::placeholder { color: var(--text-muted); }
+    .btn-send {
+      background: var(--accent); border: none; color: #0a0908;
+      font-family: var(--font); font-size: 10px; font-weight: 600;
+      letter-spacing: 0.12em; padding: 14px 22px; cursor: pointer;
+      text-transform: uppercase; transition: opacity 0.12s; flex-shrink: 0;
+    }
+    .btn-send:hover { opacity: 0.88; }
+    .btn-send:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">◈ CLAWBOT CLOUD</div>
+  <div class="header-right">
+    <span class="user-email" id="user-email">chargement...</span>
+    <span class="plan-badge" id="plan-badge">—</span>
+    <button class="btn-logout" onclick="logout()">Déconnexion</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- Cards -->
+  <div class="cards">
+    <!-- Sub key -->
+    <div class="card">
+      <div class="card-label">Clé d'abonnement</div>
+      <div class="key-row">
+        <span class="key-value" id="key-display">clb-•-••••••••••••••••••••••••••••••••</span>
+        <button class="btn-sm" id="btn-reveal" onclick="toggleKey()">Afficher</button>
+        <button class="btn-sm" id="btn-copy" onclick="copyKey()">Copier</button>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted)">Envoyez cette clé à PicoClaw pour accéder au LLM</div>
+    </div>
+
+    <!-- Token usage -->
+    <div class="card">
+      <div class="card-label">Tokens aujourd'hui</div>
+      <div class="token-count" id="token-count">—</div>
+      <div class="token-limit" id="token-limit">/ — tokens</div>
+      <div class="progress-track"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+      <div class="token-pct" id="token-pct">0% du quota</div>
+    </div>
+
+    <!-- Model / Plan -->
+    <div class="card">
+      <div class="card-label">Modèle actif</div>
+      <div class="model-name" id="model-name">—</div>
+      <div class="model-sub" id="plan-desc">—</div>
+    </div>
+  </div>
+
+  <!-- Devices -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-title">Appareils</span>
+      <button class="btn-action" id="btn-link" onclick="toggleActivate()">+ Associer un appareil</button>
+    </div>
+
+    <div class="activate-row hidden" id="activate-row">
+      <input id="device-id-input" placeholder="ID de l'appareil (affiché au démarrage)" />
+      <span class="activate-msg" id="activate-msg"></span>
+      <button class="btn-cancel" onclick="toggleActivate()">✕</button>
+      <button class="btn-confirm" onclick="doActivate()">Associer</button>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>ID Appareil</th>
+          <th>Board</th>
+          <th>Firmware</th>
+          <th>Adresse IP</th>
+          <th>Dernière vue</th>
+          <th>PicoClaw</th>
+          <th>Core</th>
+        </tr>
+      </thead>
+      <tbody id="devices-tbody">
+        <tr class="empty-row"><td colspan="7">Chargement des appareils...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Chat -->
+  <div class="chat-section">
+    <div class="chat-header">Chat — Clawbot AI</div>
+    <div class="chat-messages" id="chat-messages">
+      <div class="chat-empty" id="chat-empty">Posez votre première question à Clawbot ↓</div>
+    </div>
+    <div class="chat-input-row">
+      <textarea class="chat-input" id="chat-input" rows="1"
+        placeholder="Écrivez votre message... (Entrée pour envoyer, Maj+Entrée pour saut de ligne)"
+        onkeydown="handleKey(event)"></textarea>
+      <button class="btn-send" id="btn-send" onclick="sendChat()">Envoyer →</button>
+    </div>
+  </div>
+
+</main>
+
+<script>
+  const token = localStorage.getItem('clawbot_token');
+  const subKey = localStorage.getItem('clawbot_subkey');
+  if (!token) window.location.href = '/';
+
+  let userInfo = null;
+  let keyRevealed = false;
+  const messages = []; // chat history
+
+  // ── Load user info ──────────────────────────────────────────────────────────
+  async function loadUser() {
+    try {
+      const r = await fetch('/v1/user/me', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (r.status === 401) { logout(); return; }
+      userInfo = await r.json();
+      renderUserInfo();
+    } catch (e) {
+      console.error('loadUser:', e);
+    }
+  }
+
+  function renderUserInfo() {
+    const u = userInfo;
+    document.getElementById('user-email').textContent = u.email;
+
+    const planLabels = { particulier: 'Particulier', pro: 'Pro', free: 'Free' };
+    document.getElementById('plan-badge').textContent = planLabels[u.plan] || u.plan;
+
+    // Key display
+    if (subKey) {
+      const parts = subKey.split('-');
+      document.getElementById('key-display').textContent =
+        parts[0] + '-' + parts[1] + '-' + '•'.repeat(32);
+    }
+
+    // Tokens
+    const used = u.tokens_used_today || 0;
+    const limit = u.tokens_per_day || 200000;
+    const pct = Math.min(100, Math.round((used / limit) * 100));
+    document.getElementById('token-count').textContent = used.toLocaleString('fr-FR');
+    document.getElementById('token-limit').textContent = '/ ' + limit.toLocaleString('fr-FR') + ' tokens';
+    document.getElementById('token-pct').textContent = pct + '% du quota journalier';
+    const bar = document.getElementById('progress-fill');
+    bar.style.width = pct + '%';
+    bar.className = 'progress-fill' + (pct > 80 ? ' danger' : pct > 50 ? ' warn' : '');
+
+    // Model
+    const modelLabels = {
+      'clawbot-smart': 'Claude Sonnet',
+      'clawbot-pro': 'Claude Opus',
+      'claude-haiku-4-5-20251001': 'Claude Haiku',
+    };
+    document.getElementById('model-name').textContent = modelLabels[u.model] || u.model;
+    const planDescs = { particulier: 'Plan Particulier · 7,99 €/mois', pro: 'Plan Pro · 24,99 €/mois', free: 'Plan Free' };
+    document.getElementById('plan-desc').textContent = planDescs[u.plan] || u.plan;
+  }
+
+  function toggleKey() {
+    if (!subKey) return;
+    keyRevealed = !keyRevealed;
+    const el = document.getElementById('key-display');
+    const btn = document.getElementById('btn-reveal');
+    el.textContent = keyRevealed ? subKey : (subKey.split('-')[0] + '-' + subKey.split('-')[1] + '-' + '•'.repeat(32));
+    btn.textContent = keyRevealed ? 'Masquer' : 'Afficher';
+  }
+
+  async function copyKey() {
+    if (!subKey) return;
+    await navigator.clipboard.writeText(subKey);
+    const btn = document.getElementById('btn-copy');
+    btn.textContent = 'Copié !';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copier'; btn.classList.remove('copied'); }, 2000);
+  }
+
+  // ── Devices ─────────────────────────────────────────────────────────────────
+  async function loadDevices() {
+    try {
+      const r = await fetch('/v1/devices', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await r.json();
+      renderDevices(data.devices || []);
+    } catch (e) {
+      console.error('loadDevices:', e);
+    }
+  }
+
+  function renderDevices(devices) {
+    const tbody = document.getElementById('devices-tbody');
+    if (!devices.length) {
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="7">Aucun appareil associé. Cliquez sur "+ Associer un appareil".</td></tr>';
+      return;
+    }
+    tbody.innerHTML = devices.map(d => {
+      const seen = d.last_seen_at ? relTime(d.last_seen_at) : '—';
+      const dot = s => `<span class="status-dot"><span class="dot ${s === 'active' ? 'ok' : s ? 'ko' : 'na'}"></span>${s || '—'}</span>`;
+      return `<tr>
+        <td style="font-size:11px;color:var(--text-muted)">${d.device_id}</td>
+        <td>${d.board || '—'}</td>
+        <td>${d.firmware || '—'}</td>
+        <td>${d.last_ip || '—'}</td>
+        <td style="font-size:11px">${seen}</td>
+        <td>${dot(d.picoclaw_status)}</td>
+        <td>${dot(d.core_status)}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function relTime(iso) {
+    const diff = Math.floor((Date.now() - new Date(iso)) / 1000);
+    if (diff < 60) return diff + 's';
+    if (diff < 3600) return Math.floor(diff/60) + 'min';
+    if (diff < 86400) return Math.floor(diff/3600) + 'h';
+    return Math.floor(diff/86400) + 'j';
+  }
+
+  function toggleActivate() {
+    const row = document.getElementById('activate-row');
+    row.classList.toggle('hidden');
+    if (!row.classList.contains('hidden')) document.getElementById('device-id-input').focus();
+    document.getElementById('activate-msg').textContent = '';
+  }
+
+  async function doActivate() {
+    const deviceId = document.getElementById('device-id-input').value.trim();
+    if (!deviceId) return;
+    const msg = document.getElementById('activate-msg');
+    msg.style.color = 'var(--text-dim)';
+    msg.textContent = 'Association...';
+    try {
+      const r = await fetch('/v1/activate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ device_id: deviceId }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.detail || 'Erreur');
+      msg.style.color = 'var(--success)';
+      msg.textContent = '✓ ' + data.message;
+      document.getElementById('device-id-input').value = '';
+      setTimeout(() => { toggleActivate(); loadDevices(); }, 2000);
+    } catch (e) {
+      msg.style.color = 'var(--danger)';
+      msg.textContent = '✕ ' + e.message;
+    }
+  }
+
+  // ── Chat ─────────────────────────────────────────────────────────────────────
+  function handleKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
+  }
+
+  function appendMsg(role, content) {
+    const wrap = document.createElement('div');
+    wrap.className = 'msg-wrap ' + role;
+    wrap.innerHTML = `
+      <div class="msg-role">${role === 'user' ? 'Vous' : 'Clawbot'}</div>
+      <div class="msg-bubble">${escHtml(content)}</div>`;
+    const container = document.getElementById('chat-messages');
+    document.getElementById('chat-empty')?.remove();
+    container.appendChild(wrap);
+    container.scrollTop = container.scrollHeight;
+    return wrap;
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function showTyping() {
+    const container = document.getElementById('chat-messages');
+    const el = document.createElement('div');
+    el.id = 'typing';
+    el.className = 'msg-wrap assistant';
+    el.innerHTML = `<div class="msg-role">Clawbot</div>
+      <div class="typing-indicator">
+        <span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>
+      </div>`;
+    container.appendChild(el);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  function hideTyping() { document.getElementById('typing')?.remove(); }
+
+  async function sendChat() {
+    const input = document.getElementById('chat-input');
+    const content = input.value.trim();
+    if (!content) return;
+
+    const btn = document.getElementById('btn-send');
+    btn.disabled = true;
+    input.value = '';
+
+    messages.push({ role: 'user', content });
+    appendMsg('user', content);
+    showTyping();
+
+    try {
+      const planModel = userInfo?.model || 'clawbot-smart';
+      const r = await fetch('/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${subKey}`,
+        },
+        body: JSON.stringify({
+          model: planModel,
+          messages: messages,
+          max_tokens: 2048,
+        }),
+      });
+      const data = await r.json();
+      hideTyping();
+      if (!r.ok) throw new Error(data.detail || JSON.stringify(data));
+      const reply = data.choices?.[0]?.message?.content || '(pas de réponse)';
+      messages.push({ role: 'assistant', content: reply });
+      appendMsg('assistant', reply);
+      // Refresh token count
+      if (userInfo) {
+        const usage = data.usage;
+        if (usage) userInfo.tokens_used_today = (userInfo.tokens_used_today || 0) + (usage.total_tokens || 0);
+        renderUserInfo();
+      }
+    } catch (e) {
+      hideTyping();
+      appendMsg('assistant', '⚠ Erreur : ' + e.message);
+    } finally {
+      btn.disabled = false;
+      input.focus();
+    }
+  }
+
+  function logout() {
+    localStorage.clear();
+    window.location.href = '/';
+  }
+
+  // Init
+  loadUser();
+  loadDevices();
+  setInterval(loadDevices, 30000); // refresh devices every 30s
+</script>
+</body>
+</html>
