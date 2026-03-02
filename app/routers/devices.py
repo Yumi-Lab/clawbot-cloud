@@ -99,7 +99,7 @@ def provision(device_id: str, db: Session = Depends(get_db)):
         config={
             "subscription_key": user.sub_key,
             "model": plan_cfg["model"],
-            "base_url": "https://api.clawbot.io/v1",
+            "base_url": "https://clawbot-api.yumi-lab.com/v1",
         },
         modules=[],  # future: push modules from user's plan
     )
