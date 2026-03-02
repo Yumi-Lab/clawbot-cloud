@@ -197,6 +197,7 @@
 
 <!-- Login overlay -->
 <div class="login-overlay" id="login-overlay">
+  <button class="btn-theme" id="btn-theme-login" onclick="toggleTheme()" title="Changer le thème" style="position:fixed;top:14px;right:16px">☀</button>
   <div class="login-box">
     <div class="login-logo">◈ CLAWBOT ADMIN</div>
     <div class="login-title">Accès réservé à l'administrateur</div>
@@ -327,8 +328,11 @@
   // Theme
   function applyTheme(t) {
     document.documentElement.setAttribute('data-theme', t);
-    const btn = document.getElementById('btn-theme');
-    if (btn) btn.textContent = t === 'light' ? '☾' : '☀';
+    const icon = t === 'light' ? '☾' : '☀';
+    ['btn-theme', 'btn-theme-login'].forEach(id => {
+      const btn = document.getElementById(id);
+      if (btn) btn.textContent = icon;
+    });
   }
   function toggleTheme() {
     const next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
