@@ -61,6 +61,8 @@ async def chat_completions(request: Request, authorization: str = Header(...)):
         body = await request.json()
         # Override model with plan-allowed model
         body["model"] = plan_cfg["upstream_model"]
+        # Anthropic requires max_tokens
+        body.setdefault("max_tokens", 4096)
 
         streaming = body.get("stream", False)
 
