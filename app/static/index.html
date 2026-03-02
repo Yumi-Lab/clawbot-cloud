@@ -24,6 +24,21 @@
       --font:         'IBM Plex Mono', monospace;
     }
 
+    [data-theme="light"] {
+      --bg:           #f5f2ec;
+      --bg-card:      #eae6dc;
+      --border:       #c8bfa8;
+      --border-focus: #b87800;
+      --text:         #1a1610;
+      --text-dim:     #4a3e28;
+      --text-muted:   #8a7a58;
+      --accent:       #b87800;
+      --accent-soft:  rgba(184,120,0,0.1);
+      --danger:       #cc2200;
+      --success:      #1a8844;
+    }
+    [data-theme="light"] body::after { display: none; }
+
     body {
       background: var(--bg);
       color: var(--text);
@@ -146,9 +161,18 @@
     .msg.success { color: var(--success); border-color: var(--success); background: rgba(68,221,136,0.05); display: block; }
 
     .hidden { display: none !important; }
+
+    .btn-theme {
+      position: fixed; top: 14px; right: 16px; z-index: 200;
+      background: none; border: 1px solid var(--border);
+      color: var(--text-dim); font-size: 14px;
+      padding: 4px 10px; cursor: pointer; transition: all 0.12s; line-height: 1;
+    }
+    .btn-theme:hover { border-color: var(--accent); color: var(--accent); }
   </style>
 </head>
 <body>
+<button class="btn-theme" id="btn-theme" onclick="toggleTheme()" title="Changer le thème">☀</button>
 <div class="container">
 
   <!-- Brand -->
@@ -233,6 +257,17 @@
 </div>
 
 <script>
+  function applyTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    document.getElementById('btn-theme').textContent = t === 'light' ? '☾' : '☀';
+  }
+  function toggleTheme() {
+    const next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+    localStorage.setItem('clawbot_theme', next);
+    applyTheme(next);
+  }
+  applyTheme(localStorage.getItem('clawbot_theme') || 'dark');
+
   if (localStorage.getItem('clawbot_token')) window.location.href = '/dashboard';
 
   function showTab(tab) {

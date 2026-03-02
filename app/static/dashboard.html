@@ -26,6 +26,23 @@
       --font:         'IBM Plex Mono', monospace;
     }
 
+    [data-theme="light"] {
+      --bg:           #f5f2ec;
+      --bg-card:      #eae6dc;
+      --bg-input:     #f0ece5;
+      --border:       #c8bfa8;
+      --border-focus: #b87800;
+      --text:         #1a1610;
+      --text-dim:     #4a3e28;
+      --text-muted:   #8a7a58;
+      --accent:       #b87800;
+      --accent-soft:  rgba(184,120,0,0.1);
+      --danger:       #cc2200;
+      --success:      #1a8844;
+      --warn:         #cc7700;
+    }
+    [data-theme="light"] body::after { display: none; }
+
     body {
       background: var(--bg);
       color: var(--text);
@@ -67,6 +84,12 @@
       transition: all 0.12s; text-transform: uppercase;
     }
     .btn-logout:hover { border-color: var(--danger); color: var(--danger); }
+    .btn-theme {
+      background: none; border: 1px solid var(--border);
+      color: var(--text-dim); font-family: var(--font); font-size: 14px;
+      padding: 4px 10px; cursor: pointer; transition: all 0.12s; line-height: 1;
+    }
+    .btn-theme:hover { border-color: var(--accent); color: var(--accent); }
 
     /* ── Main ── */
     main { flex: 1; padding: 28px 32px; display: flex; flex-direction: column; gap: 24px; max-width: 1200px; width: 100%; margin: 0 auto; }
@@ -236,6 +259,7 @@
   <div class="header-right">
     <span class="user-email" id="user-email">chargement...</span>
     <span class="plan-badge" id="plan-badge">—</span>
+    <button class="btn-theme" id="btn-theme" onclick="toggleTheme()" title="Changer le thème">☀</button>
     <button class="btn-logout" onclick="logout()">Déconnexion</button>
   </div>
 </header>
@@ -321,6 +345,18 @@
 </main>
 
 <script>
+  // Theme
+  function applyTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    document.getElementById('btn-theme').textContent = t === 'light' ? '☾' : '☀';
+  }
+  function toggleTheme() {
+    const next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+    localStorage.setItem('clawbot_theme', next);
+    applyTheme(next);
+  }
+  applyTheme(localStorage.getItem('clawbot_theme') || 'dark');
+
   const token = localStorage.getItem('clawbot_token');
   const subKey = localStorage.getItem('clawbot_subkey');
   if (!token) window.location.href = '/';
