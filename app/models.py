@@ -8,7 +8,19 @@ from sqlalchemy import (
     Boolean, Column, DateTime, ForeignKey,
     Integer, String, Text, Enum
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.types import TypeDecorator, String as SAString
+
+
+class UUID(TypeDecorator):
+    """SQLite-compatible UUID stored as string."""
+    impl = SAString(36)
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        return str(value) if value else None
+
+    def process_result_value(self, value, dialect):
+        return value
 from sqlalchemy.orm import DeclarativeBase, relationship
 
 
