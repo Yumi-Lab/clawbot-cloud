@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.database import engine
 from app.models import Base
-from app.routers import auth, devices, llm_proxy, user, admin
+from app.routers import auth, devices, llm_proxy, user, admin, ws
 
 # Create tables (idempotent; use Alembic for migrations in production)
 Base.metadata.create_all(bind=engine)
@@ -33,6 +33,7 @@ app.include_router(devices.router)
 app.include_router(llm_proxy.router)
 app.include_router(user.router)
 app.include_router(admin.router)
+app.include_router(ws.router)
 
 # Static assets (CSS, JS, images if any)
 _static_dir = os.path.join(os.path.dirname(__file__), "static")

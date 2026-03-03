@@ -4,6 +4,7 @@ GET  /v1/provision           — fetch config for a device
 POST /v1/activate            — link device to user account (called from Yumi-Lab app)
 GET  /v1/devices             — list user's devices (requires JWT)
 """
+import asyncio
 import secrets
 from datetime import datetime, timedelta
 
@@ -15,6 +16,7 @@ from app.auth import decode_token, generate_activation_token
 from app.config import ACTIVATION_TOKEN_TTL_MINUTES, PLAN_LIMITS
 from app.database import get_db
 from app.models import ActivationToken, Device, User
+from app.routers.ws import manager as ws_manager, _build_config_payload
 
 router = APIRouter(tags=["devices"])
 
@@ -36,6 +38,7 @@ def current_user(authorization: str = Header(...), db: Session = Depends(get_db)
 
 class HeartbeatRequest(BaseModel):
     device_id: str
+    mac: str | None = None
     board: str | None = None
     firmware: str | None = None
     ip: str | None = None
@@ -54,6 +57,10 @@ def heartbeat(req: HeartbeatRequest, db: Session = Depends(get_db)):
         # Auto-register unknown device
         device = Device(device_id=req.device_id)
         db.add(device)
+
+    # Store MAC if provided
+    if req.mac and not device.mac:
+        device.mac = req.mac.upper().strip()
 
     device.board = req.board or device.board
     device.firmware = req.firmware or device.firmware
@@ -108,7 +115,8 @@ def provision(device_id: str, db: Session = Depends(get_db)):
 # ── Activate (called from Yumi-Lab mobile app after QR scan) ─────────────────
 
 class ActivateRequest(BaseModel):
-    device_id: str
+    device_id: str | None = None
+    mac: str | None = None
 
 
 class ActivateResponse(BaseModel):
@@ -117,21 +125,48 @@ class ActivateResponse(BaseModel):
 
 
 @router.post("/v1/activate", response_model=ActivateResponse)
-def activate(req: ActivateRequest, db: Session = Depends(get_db),
-             user: User = Depends(current_user)):
-    device = db.query(Device).filter_by(device_id=req.device_id).first()
+async def activate(req: ActivateRequest, db: Session = Depends(get_db),
+                   user: User = Depends(current_user)):
+    if not req.device_id and not req.mac:
+        raise HTTPException(400, "device_id or mac required")
+
+    # Lookup by MAC first, then by device_id
+    device = None
+    mac = req.mac.upper().strip() if req.mac else None
+
+    if mac:
+        device = db.query(Device).filter_by(mac=mac).first()
+    if not device and req.device_id:
+        device = db.query(Device).filter_by(device_id=req.device_id).first()
     if not device:
-        device = Device(device_id=req.device_id)
+        device = Device(
+            device_id=req.device_id or f"mac-{mac}",
+            mac=mac,
+        )
         db.add(device)
+
+    # Store MAC if we have it and device doesn't
+    if mac and not device.mac:
+        device.mac = mac
 
     if device.user_id and str(device.user_id) != str(user.id):
         raise HTTPException(409, "Device already linked to another account")
 
     device.user_id = user.id
-    device.provisioned = False  # heartbeat will re-provision
+    device.provisioned = False
     db.commit()
 
-    return ActivateResponse(ok=True, message=f"Device {req.device_id} linked to {user.email}")
+    # Push config via WebSocket if device is connected
+    identifier = device.mac or ""
+    if identifier and user.sub_active:
+        config_msg = _build_config_payload(user)
+        pushed = await ws_manager.send_to(identifier, config_msg)
+        if pushed:
+            device.provisioned = True
+            db.commit()
+
+    label = device.mac or device.device_id
+    return ActivateResponse(ok=True, message=f"Device {label} linked to {user.email}")
 
 
 # ── List devices ──────────────────────────────────────────────────────────────
@@ -143,6 +178,7 @@ def list_devices(db: Session = Depends(get_db), user: User = Depends(current_use
         "devices": [
             {
                 "device_id": d.device_id,
+                "mac": d.mac,
                 "board": d.board,
                 "firmware": d.firmware,
                 "last_ip": d.last_ip,
