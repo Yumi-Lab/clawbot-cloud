@@ -54,6 +54,9 @@ class Device(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     device_id = Column(String(64), unique=True, nullable=False, index=True)
     mac = Column(String(17), unique=True, nullable=True, index=True)
+    # HMAC-SHA256("YUMI", mac_clean) hex uppercase — 64 chars
+    # Deterministic device identity, safe to ~16M devices on first 12 chars
+    id_long = Column(String(64), unique=True, nullable=True, index=True)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     board = Column(String(64), nullable=True)
     firmware = Column(String(32), nullable=True)

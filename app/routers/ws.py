@@ -5,6 +5,8 @@ Devices connect with their MAC address and maintain a persistent tunnel.
 The cloud can push config, commands, and activation status in real time.
 """
 import asyncio
+import hashlib
+import hmac as _hmac
 import json
 import logging
 from datetime import datetime
@@ -61,6 +63,17 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
+# ── Helper: compute device IDs from MAC ──────────────────────────────────────
+
+def _compute_id_long(mac_clean: str) -> str:
+    """HMAC-SHA256(key='YUMI', msg=mac_clean) → 64-char uppercase hex.
+    - device_code = first 12 chars formatted as XXXX-XXXX-XXXX
+    - id_long     = full 64-char string (used for secure device identity)
+    Collision-safe to ~16M devices on device_code; id_long is practically unique.
+    """
+    return _hmac.new(b"YUMI", mac_clean.encode(), hashlib.sha256).hexdigest().upper()
+
+
 # ── Helper: build config payload for a provisioned device ─────────────────────
 
 def _build_config_payload(user: User) -> dict:
@@ -87,6 +100,7 @@ async def device_ws(websocket: WebSocket, mac: str | None = None):
     db: Session = next(get_db())
     try:
         # Upsert device by MAC
+        mac_clean = mac.replace(":", "")
         device = db.query(Device).filter_by(mac=mac).first()
         if not device:
             # Also try legacy device_id lookup, otherwise create
@@ -95,12 +109,25 @@ async def device_ws(websocket: WebSocket, mac: str | None = None):
             db.commit()
             db.refresh(device)
 
+        # Assign id_long if not yet set (deterministic: same MAC → same id_long)
+        if not device.id_long:
+            device.id_long = _compute_id_long(mac_clean)
+
         device.last_seen_at = datetime.utcnow()
         db.commit()
 
+        # Build device_code for welcome message (first 12 chars of id_long)
+        h = device.id_long
+        device_code = f"{h[:4]}-{h[4:8]}-{h[8:12]}"
+
         # Determine activation status
         status = "pending"
-        welcome = {"type": "welcome", "status": status}
+        welcome = {
+            "type": "welcome",
+            "status": status,
+            "id_long": device.id_long,
+            "device_code": device_code,
+        }
 
         if device.user_id:
             user = db.query(User).filter_by(id=device.user_id).first()
