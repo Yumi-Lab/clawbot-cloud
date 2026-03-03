@@ -81,14 +81,50 @@ async def chat_completions(request: Request, authorization: str = Header(...)):
         )
 
         if streaming:
-            # Streaming passthrough
+            # Pre-check: refuse if already over limit (rough guard before stream starts)
+            limit = plan_cfg["tokens_per_day"]
+            if user.tokens_used_today >= limit:
+                raise HTTPException(429, f"Daily token limit reached ({limit} tokens/day)")
+
+            # Capture sub_key for post-stream token recording (db will be closed by then)
+            _sub_key = sub_key
+
             def stream_gen():
+                """Passthrough SSE stream; parse Anthropic usage events to count tokens."""
+                input_tokens = 0
+                output_tokens = 0
                 try:
                     with urllib.request.urlopen(req, timeout=120) as resp:
-                        for chunk in resp:
-                            yield chunk
+                        for raw_line in resp:
+                            yield raw_line
+                            # Parse SSE lines to extract usage
+                            line = raw_line.decode("utf-8", errors="replace").strip()
+                            if not line.startswith("data: ") or line == "data: [DONE]":
+                                continue
+                            try:
+                                ev = json.loads(line[6:])
+                                t = ev.get("type", "")
+                                if t == "message_start":
+                                    input_tokens = ev.get("message", {}).get("usage", {}).get("input_tokens", 0)
+                                elif t == "message_delta":
+                                    output_tokens = ev.get("usage", {}).get("output_tokens", 0)
+                            except Exception:
+                                pass
                 except Exception as e:
                     yield f"data: [ERROR] {e}\n\n".encode()
+
+                # Record token usage after stream completes
+                _db = SessionLocal()
+                try:
+                    _user = _get_user_by_sub_key(_sub_key, _db)
+                    if _user and (input_tokens + output_tokens) > 0:
+                        _reset_daily_tokens_if_needed(_user, _db)
+                        _user.tokens_used_today = (_user.tokens_used_today or 0) + input_tokens + output_tokens
+                        _db.commit()
+                except Exception:
+                    pass
+                finally:
+                    _db.close()
 
             return StreamingResponse(stream_gen(), media_type="text/event-stream")
 

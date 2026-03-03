@@ -191,6 +191,23 @@
     .dot.ok { background: var(--success); box-shadow: 0 0 4px var(--success); }
     .dot.ko { background: var(--danger); }
     .dot.na { background: var(--text-muted); }
+
+    /* Action buttons in table */
+    .actions { display: flex; gap: 4px; flex-wrap: wrap; }
+    .btn-act {
+      background: none; border: 1px solid var(--border); color: var(--text-muted);
+      font-family: var(--font); font-size: 9px; letter-spacing: 0.08em;
+      padding: 3px 7px; cursor: pointer; transition: all 0.1s; text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .btn-act:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-act.danger:hover { border-color: var(--danger); color: var(--danger); }
+    .btn-act.ok:hover { border-color: var(--success); color: var(--success); }
+    .plan-sel {
+      background: var(--bg-input); border: 1px solid var(--border); color: var(--text-dim);
+      font-family: var(--font); font-size: 9px; padding: 3px 4px; outline: none;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -282,6 +299,7 @@
                 <th>Appareils</th>
                 <th>Clé (tronquée)</th>
                 <th>Créé le</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody id="users-tbody">
@@ -419,7 +437,7 @@
     const tbody = document.getElementById('users-tbody');
     document.getElementById('user-count').textContent = users.length + ' utilisateur' + (users.length !== 1 ? 's' : '');
     if (!users.length) {
-      tbody.innerHTML = '<tr class="empty-row"><td colspan="7">Aucun utilisateur</td></tr>';
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="8">Aucun utilisateur</td></tr>';
       return;
     }
     tbody.innerHTML = users.map(u => {
@@ -427,6 +445,9 @@
       const barClass = pct > 80 ? 'danger' : pct > 50 ? 'warn' : '';
       const keyShort = u.sub_key ? u.sub_key.substring(0, 12) + '...' : '—';
       const date = u.created_at ? new Date(u.created_at).toLocaleDateString('fr-FR') : '—';
+      const toggleBtn = u.sub_active
+        ? `<button class="btn-act danger" onclick="patchUser('${u.id}',{sub_active:false})">Désactiver</button>`
+        : `<button class="btn-act ok" onclick="patchUser('${u.id}',{sub_active:true})">Activer</button>`;
       return `<tr>
         <td>${escHtml(u.email)}</td>
         <td><span class="badge ${u.plan}">${u.plan}</span></td>
@@ -440,8 +461,38 @@
         <td style="text-align:center">${u.device_count}</td>
         <td style="color:var(--text-muted);font-size:11px">${keyShort}</td>
         <td style="font-size:11px;color:var(--text-muted)">${date}</td>
+        <td>
+          <div class="actions">
+            ${toggleBtn}
+            <select class="plan-sel" onchange="patchUser('${u.id}',{plan:this.value});this.value='${u.plan}'">
+              <option value="${u.plan}" selected>Plan…</option>
+              <option value="free">free</option>
+              <option value="particulier">particulier</option>
+              <option value="pro">pro</option>
+            </select>
+            <button class="btn-act" onclick="patchUser('${u.id}',{reset_tokens:true})" title="Remettre à zéro les tokens">↺ tokens</button>
+          </div>
+        </td>
       </tr>`;
     }).join('');
+  }
+
+  async function patchUser(userId, patch) {
+    try {
+      const r = await fetch(`/v1/admin/users/${userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-admin-secret': adminSecret },
+        body: JSON.stringify(patch),
+      });
+      if (!r.ok) {
+        const d = await r.json();
+        alert('Erreur : ' + (d.detail || r.status));
+        return;
+      }
+      await loadAll();
+    } catch (e) {
+      alert('Erreur réseau : ' + e.message);
+    }
   }
 
   function filterUsers() {

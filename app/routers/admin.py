@@ -1,14 +1,16 @@
 """
 Admin routes — protected by ADMIN_SECRET env var header X-Admin-Secret
 
-GET  /v1/admin/stats    — global platform stats
-GET  /v1/admin/users    — list all users
-GET  /v1/admin/devices  — list all devices
+GET   /v1/admin/stats           — global platform stats
+GET   /v1/admin/users           — list all users
+PATCH /v1/admin/users/{id}      — update user (sub_active, plan, reset tokens)
+GET   /v1/admin/devices         — list all devices
 """
 import os
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Header, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -61,6 +63,44 @@ def list_users(db: Session = Depends(get_db), _=Depends(require_admin)):
             "created_at": u.created_at.isoformat() if u.created_at else None,
         })
     return {"users": result}
+
+
+class UserPatch(BaseModel):
+    sub_active: bool | None = None
+    plan: str | None = None
+    reset_tokens: bool = False
+
+
+@router.patch("/users/{user_id}")
+def patch_user(user_id: str, patch: UserPatch,
+               db: Session = Depends(get_db), _=Depends(require_admin)):
+    user = db.query(User).filter_by(id=user_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    if patch.sub_active is not None:
+        user.sub_active = patch.sub_active
+
+    if patch.plan is not None:
+        if patch.plan not in ("free", "particulier", "pro"):
+            raise HTTPException(400, "plan must be free, particulier, or pro")
+        user.plan = patch.plan
+
+    if patch.reset_tokens:
+        user.tokens_used_today = 0
+        user.tokens_reset_at = datetime.utcnow()
+
+    db.commit()
+
+    plan_cfg = PLAN_LIMITS.get(user.plan, PLAN_LIMITS["particulier"])
+    return {
+        "id": str(user.id),
+        "email": user.email,
+        "plan": user.plan,
+        "sub_active": user.sub_active,
+        "tokens_used_today": user.tokens_used_today or 0,
+        "tokens_per_day": plan_cfg["tokens_per_day"],
+    }
 
 
 @router.get("/devices")
