@@ -57,6 +57,11 @@ def admin_page():
     return FileResponse(os.path.join(_static_dir, "admin.html"))
 
 
+@app.get("/activate")
+def activate_page():
+    return FileResponse(os.path.join(_static_dir, "activate.html"))
+
+
 @app.get("/health")
 def health():
     return {"ok": True, "service": "clawbot-cloud"}

@@ -170,6 +170,10 @@
     }
     .activate-msg { font-size: 11px; color: var(--text-dim); }
 
+    /* Device code badge */
+    .dev-code { font-size: 11px; color: var(--accent); letter-spacing: 0.08em; font-weight: 500; }
+    .dev-mac { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+
     /* Table */
     table { width: 100%; border-collapse: collapse; }
     th {
@@ -304,7 +308,7 @@
     </div>
 
     <div class="activate-row hidden" id="activate-row">
-      <input id="device-id-input" placeholder="ID de l'appareil (affiché au démarrage)" />
+      <input id="device-id-input" placeholder="Code appareil (XXXX-XXXX-XXXX) ou adresse MAC" />
       <span class="activate-msg" id="activate-msg"></span>
       <button class="btn-cancel" onclick="toggleActivate()">✕</button>
       <button class="btn-confirm" onclick="doActivate()">Associer</button>
@@ -313,7 +317,7 @@
     <table>
       <thead>
         <tr>
-          <th>ID Appareil</th>
+          <th>Appareil</th>
           <th>Board</th>
           <th>Firmware</th>
           <th>Adresse IP</th>
@@ -446,17 +450,37 @@
     }
   }
 
-  function renderDevices(devices) {
+  // Compute device_code from MAC via HMAC-SHA256("YUMI", mac_clean)
+  async function computeDeviceCode(mac_clean) {
+    if (!mac_clean) return null;
+    const enc = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      'raw', enc.encode('YUMI'),
+      { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+    );
+    const sig = await crypto.subtle.sign('HMAC', key, enc.encode(mac_clean));
+    const hex = Array.from(new Uint8Array(sig))
+      .map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+    return `${hex.slice(0,4)}-${hex.slice(4,8)}-${hex.slice(8,12)}`;
+  }
+
+  async function renderDevices(devices) {
     const tbody = document.getElementById('devices-tbody');
     if (!devices.length) {
       tbody.innerHTML = '<tr class="empty-row"><td colspan="7">Aucun appareil associé. Cliquez sur "+ Associer un appareil".</td></tr>';
       return;
     }
-    tbody.innerHTML = devices.map(d => {
+    const rows = await Promise.all(devices.map(async d => {
       const seen = d.last_seen_at ? relTime(d.last_seen_at) : '—';
       const dot = s => `<span class="status-dot"><span class="dot ${s === 'active' ? 'ok' : s ? 'ko' : 'na'}"></span>${s || '—'}</span>`;
+      const mac = d.mac || '';
+      const mac_clean = mac.replace(/:/g, '').toUpperCase();
+      const code = mac_clean ? await computeDeviceCode(mac_clean) : null;
+      const deviceCell = code
+        ? `<div class="dev-code">${code}</div><div class="dev-mac">${mac}</div>`
+        : `<div style="font-size:11px;color:var(--text-muted)">${d.device_id}</div>`;
       return `<tr>
-        <td style="font-size:11px;color:var(--text-muted)">${d.device_id}</td>
+        <td>${deviceCell}</td>
         <td>${d.board || '—'}</td>
         <td>${d.firmware || '—'}</td>
         <td>${d.last_ip || '—'}</td>
@@ -464,7 +488,8 @@
         <td>${dot(d.picoclaw_status)}</td>
         <td>${dot(d.core_status)}</td>
       </tr>`;
-    }).join('');
+    }));
+    tbody.innerHTML = rows.join('');
   }
 
   function relTime(iso) {
@@ -483,16 +508,23 @@
   }
 
   async function doActivate() {
-    const deviceId = document.getElementById('device-id-input').value.trim();
-    if (!deviceId) return;
+    const input = document.getElementById('device-id-input').value.trim();
+    if (!input) return;
     const msg = document.getElementById('activate-msg');
     msg.style.color = 'var(--text-dim)';
     msg.textContent = 'Association...';
+
+    // Detect if input is a MAC (XX:XX:XX:XX:XX:XX or no separators) or device_id
+    const isMac = /^([0-9A-Fa-f]{2}[:\-]?){5}[0-9A-Fa-f]{2}$/.test(input.replace(/-/g,''));
+    const body = isMac
+      ? { mac: input.replace(/[^0-9A-Fa-f:]/g, '').toUpperCase() }
+      : { device_id: input };
+
     try {
       const r = await fetch('/v1/activate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ device_id: deviceId }),
+        body: JSON.stringify(body),
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data.detail || 'Erreur');

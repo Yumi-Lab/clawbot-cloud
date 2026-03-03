@@ -302,6 +302,7 @@
       localStorage.setItem('clawbot_token', data.access_token);
       localStorage.setItem('clawbot_plan', data.plan);
       localStorage.setItem('clawbot_subkey', data.sub_key);
+      localStorage.setItem('clawbot_email', document.getElementById('login-email').value);
       window.location.href = '/dashboard';
     } catch (err) {
       showMsg('login-msg', err.message, 'error');
@@ -328,6 +329,7 @@
       localStorage.setItem('clawbot_token', data.access_token);
       localStorage.setItem('clawbot_plan', data.plan);
       localStorage.setItem('clawbot_subkey', data.sub_key);
+      localStorage.setItem('clawbot_email', document.getElementById('reg-email').value);
       window.location.href = '/dashboard';
     } catch (err) {
       showMsg('reg-msg', err.message, 'error');
