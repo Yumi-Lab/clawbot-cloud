@@ -10,12 +10,12 @@ PLAN_LIMITS = {
     },
     "particulier": {
         "tokens_per_day": 200_000,
-        "model": "clawbot-smart",
+        "model": "claude-sonnet-4-6",
         "upstream_model": "claude-sonnet-4-6",
     },
     "pro": {
         "tokens_per_day": 2_000_000,   # effectively unlimited for normal use
-        "model": "clawbot-pro",
+        "model": "claude-opus-4-6",
         "upstream_model": "claude-opus-4-6",
     },
 }
