@@ -130,9 +130,11 @@ async def activate(req: ActivateRequest, db: Session = Depends(get_db),
     if not req.device_id and not req.mac:
         raise HTTPException(400, "device_id or mac required")
 
-    # Lookup by MAC first, then by device_id
+    # Normalize MAC to uppercase no-colon format (matches WebSocket storage)
     device = None
-    mac = req.mac.upper().strip() if req.mac else None
+    mac = None
+    if req.mac:
+        mac = req.mac.upper().strip().replace(":", "").replace("-", "")
 
     if mac:
         device = db.query(Device).filter_by(mac=mac).first()
