@@ -55,9 +55,9 @@ async def _route_via_device(mac: str, body: dict):
         try:
             while True:
                 try:
-                    msg = await asyncio.wait_for(q.get(), timeout=120.0)
+                    msg = await asyncio.wait_for(q.get(), timeout=300.0)
                 except asyncio.TimeoutError:
-                    payload = json.dumps({"type": "done", "content": "⚠ Device timeout (120s)"})
+                    payload = json.dumps({"type": "done", "content": "⚠ Device timeout (300s)"})
                     yield f"event: done\ndata: {payload}\n\n".encode()
                     yield b"data: [DONE]\n\n"
                     return
