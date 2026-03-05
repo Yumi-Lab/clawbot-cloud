@@ -29,6 +29,10 @@ class ConnectionManager:
 
     def __init__(self):
         self._connections: dict[str, WebSocket] = {}
+        # Pending chat requests awaiting device response: request_id → asyncio.Queue
+        self._pending: dict[str, asyncio.Queue] = {}
+        # MACs currently processing a tunnel request (prevents recursive routing)
+        self._tunneling: set[str] = set()
 
     async def connect(self, mac: str, ws: WebSocket):
         await ws.accept()
@@ -59,6 +63,40 @@ class ConnectionManager:
             self.disconnect(mac)
             return False
 
+    def register_request(self, request_id: str) -> asyncio.Queue:
+        """Create a queue for an in-flight chat_request and return it."""
+        q: asyncio.Queue = asyncio.Queue()
+        self._pending[request_id] = q
+        return q
+
+    def resolve_request(self, request_id: str, item: dict):
+        """Deliver a device response chunk/done/error to the waiting HTTP handler."""
+        q = self._pending.get(request_id)
+        if q:
+            q.put_nowait(item)
+
+    def cleanup_request(self, request_id: str):
+        self._pending.pop(request_id, None)
+
+    def get_online_mac_for_user(self, user_devices) -> str | None:
+        """Return the MAC (no colons, uppercase) of the first online, non-busy device."""
+        for device in user_devices:
+            if not device.mac:
+                continue
+            mac_clean = device.mac.replace(":", "").upper()
+            # Skip if device is already processing a tunnel request (prevents recursive loop)
+            if mac_clean in self._connections and mac_clean not in self._tunneling:
+                return mac_clean
+        return None
+
+    def start_tunnel(self, mac: str):
+        """Mark device as busy handling a tunnel request."""
+        self._tunneling.add(mac)
+
+    def end_tunnel(self, mac: str):
+        """Release device tunnel lock."""
+        self._tunneling.discard(mac)
+
 
 manager = ConnectionManager()
 
@@ -81,7 +119,7 @@ def _build_config_payload(user: User) -> dict:
     return {
         "type": "config",
         "subscription_key": user.sub_key,
-        "model": plan_cfg["model"],
+        "model": plan_cfg.get("model_ceiling", "claude-haiku-4-5-20251001"),
         "base_url": "https://clawbot-api.yumi-lab.com/v1",
     }
 
@@ -175,6 +213,11 @@ async def device_ws(websocket: WebSocket, mac: str | None = None):
 
             elif msg_type == "ping":
                 await websocket.send_json({"type": "pong"})
+
+            elif msg_type in ("chat_chunk", "chat_done", "chat_error"):
+                rid = data.get("request_id")
+                if rid:
+                    manager.resolve_request(rid, data)
 
     except WebSocketDisconnect:
         pass
