@@ -3,10 +3,13 @@ POST /v1/chat/completions — OpenAI-compatible LLM proxy
 
 Validates subscription key → checks rate limit → forwards to Anthropic → returns response.
 """
+import asyncio
 import json
 import os
+import time
 import urllib.error
 import urllib.request
+import uuid as _uuid
 from datetime import datetime, date
 
 from fastapi import APIRouter, Header, HTTPException, Request
@@ -21,6 +24,71 @@ router = APIRouter(tags=["llm"])
 
 ANTHROPIC_BASE_URL = os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com/v1")
 ANTHROPIC_API_KEY  = os.environ.get("ANTHROPIC_API_KEY", "")
+
+
+# ── Device tunnel routing ──────────────────────────────────────────────────────
+
+async def _route_via_device(mac: str, body: dict):
+    """Forward a chat request through the WebSocket tunnel to the user's device.
+
+    The device runs the request through its local ClawbotCore (with system tools),
+    then sends back the response via chat_done. We stream it as SSE to the browser.
+    """
+    from app.routers.ws import manager  # lazy import — avoids circular at module load
+
+    request_id = str(_uuid.uuid4())
+    q = manager.register_request(request_id)
+
+    ok = await manager.send_to(mac, {
+        "type": "chat_request",
+        "request_id": request_id,
+        "payload": body,
+    })
+    if not ok:
+        manager.cleanup_request(request_id)
+        raise HTTPException(502, "Device is offline")
+
+    # Mark device busy — prevents ClawbotCore's LLM callbacks from re-routing to device
+    manager.start_tunnel(mac)
+
+    async def event_gen():
+        try:
+            while True:
+                try:
+                    msg = await asyncio.wait_for(q.get(), timeout=120.0)
+                except asyncio.TimeoutError:
+                    payload = json.dumps({"type": "done", "content": "⚠ Device timeout (120s)"})
+                    yield f"event: done\ndata: {payload}\n\n".encode()
+                    yield b"data: [DONE]\n\n"
+                    return
+
+                mtype = msg.get("type")
+                if mtype == "chat_done":
+                    content = msg.get("content", "")
+                    payload = json.dumps({"type": "done", "content": content})
+                    yield f"event: done\ndata: {payload}\n\n".encode()
+                    yield b"data: [DONE]\n\n"
+                    return
+                elif mtype == "chat_error":
+                    err = msg.get("error", "Unknown device error")
+                    payload = json.dumps({"type": "done", "content": f"⚠ {err}"})
+                    yield f"event: done\ndata: {payload}\n\n".encode()
+                    yield b"data: [DONE]\n\n"
+                    return
+                elif mtype == "chat_chunk":
+                    # Forward raw SSE line (future streaming support)
+                    data = msg.get("data", "")
+                    if data:
+                        yield (data + "\n").encode()
+        finally:
+            manager.cleanup_request(request_id)
+            manager.end_tunnel(mac)
+
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 def _get_user_by_sub_key(sub_key: str, db: Session) -> User | None:
@@ -59,8 +127,21 @@ async def chat_completions(request: Request, authorization: str = Header(...)):
 
         # --- Build upstream request ---
         body = await request.json()
-        # Override model with plan-allowed model
-        body["model"] = plan_cfg["upstream_model"]
+
+        # Route through device if one is online for this user
+        from app.routers.ws import manager as _mgr
+        device_mac = _mgr.get_online_mac_for_user(user.devices)
+        if device_mac:
+            return await _route_via_device(device_mac, body)
+
+        # No device online — fall through to direct Anthropic call
+        # Cap model to plan ceiling
+        from app.config import MODEL_HIERARCHY
+        ceiling = plan_cfg.get("model_ceiling", "claude-haiku-4-5-20251001")
+        requested = body.get("model", ceiling)
+        ceiling_idx = MODEL_HIERARCHY.index(ceiling) if ceiling in MODEL_HIERARCHY else 0
+        requested_idx = MODEL_HIERARCHY.index(requested) if requested in MODEL_HIERARCHY else 0
+        body["model"] = requested if requested_idx <= ceiling_idx else ceiling
 
         streaming = body.get("stream", False)
 
@@ -87,30 +168,50 @@ async def chat_completions(request: Request, authorization: str = Header(...)):
 
             # Capture sub_key for post-stream token recording (db will be closed by then)
             _sub_key = sub_key
+            _payload = payload
+            _upstream_headers = upstream_headers
 
             def stream_gen():
                 """Passthrough SSE stream; parse Anthropic usage events to count tokens."""
                 input_tokens = 0
                 output_tokens = 0
-                try:
-                    with urllib.request.urlopen(req, timeout=120) as resp:
-                        for raw_line in resp:
-                            yield raw_line
-                            # Parse SSE lines to extract usage
-                            line = raw_line.decode("utf-8", errors="replace").strip()
-                            if not line.startswith("data: ") or line == "data: [DONE]":
-                                continue
-                            try:
-                                ev = json.loads(line[6:])
-                                t = ev.get("type", "")
-                                if t == "message_start":
-                                    input_tokens = ev.get("message", {}).get("usage", {}).get("input_tokens", 0)
-                                elif t == "message_delta":
-                                    output_tokens = ev.get("usage", {}).get("output_tokens", 0)
-                            except Exception:
-                                pass
-                except Exception as e:
-                    yield f"data: [ERROR] {e}\n\n".encode()
+                # Retry once on 429 (TPM rate limit) with backoff
+                for attempt in range(2):
+                    try:
+                        _req = urllib.request.Request(
+                            f"{ANTHROPIC_BASE_URL}/messages",
+                            data=_payload,
+                            headers=_upstream_headers,
+                            method="POST",
+                        )
+                        with urllib.request.urlopen(_req, timeout=120) as resp:
+                            for raw_line in resp:
+                                yield raw_line
+                                line = raw_line.decode("utf-8", errors="replace").strip()
+                                if not line.startswith("data: ") or line == "data: [DONE]":
+                                    continue
+                                try:
+                                    ev = json.loads(line[6:])
+                                    t = ev.get("type", "")
+                                    if t == "message_start":
+                                        input_tokens = ev.get("message", {}).get("usage", {}).get("input_tokens", 0)
+                                    elif t == "message_delta":
+                                        output_tokens = ev.get("usage", {}).get("output_tokens", 0)
+                                except Exception:
+                                    pass
+                        break  # success
+                    except urllib.error.HTTPError as e:
+                        err_body = e.read().decode(errors="replace")
+                        if e.code == 429 and attempt == 0:
+                            time.sleep(60)  # wait 1 min then retry
+                            continue
+                        yield f"data: {{\"error\": {{\"code\": {e.code}, \"message\": \"{err_body[:200].replace(chr(34), chr(39))}\" }} }}\n\n".encode()
+                        yield b"data: [DONE]\n\n"
+                        return
+                    except Exception as e:
+                        yield f"data: {{\"error\": {{\"message\": \"{e}\" }} }}\n\n".encode()
+                        yield b"data: [DONE]\n\n"
+                        return
 
                 # Record token usage after stream completes
                 _db = SessionLocal()
@@ -127,15 +228,21 @@ async def chat_completions(request: Request, authorization: str = Header(...)):
 
             return StreamingResponse(stream_gen(), media_type="text/event-stream")
 
-        # Non-streaming
-        try:
-            with urllib.request.urlopen(req, timeout=120) as resp:
-                data = json.loads(resp.read())
-        except urllib.error.HTTPError as e:
-            err_body = e.read().decode(errors="replace")
-            raise HTTPException(e.code, err_body[:500])
-        except Exception as e:
-            raise HTTPException(502, f"Upstream error: {e}")
+        # Non-streaming — retry once on 429 (TPM rate limit)
+        data = None
+        for attempt in range(2):
+            try:
+                with urllib.request.urlopen(req, timeout=120) as resp:
+                    data = json.loads(resp.read())
+                break
+            except urllib.error.HTTPError as e:
+                err_body = e.read().decode(errors="replace")
+                if e.code == 429 and attempt == 0:
+                    time.sleep(60)
+                    continue
+                raise HTTPException(e.code, err_body[:500])
+            except Exception as e:
+                raise HTTPException(502, f"Upstream error: {e}")
 
         # Record token usage
         usage = data.get("usage", {})

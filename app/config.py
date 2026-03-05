@@ -2,21 +2,25 @@
 ClawbotCloud — Subscription plans and rate limits
 """
 
+# Model hierarchy (ascending capability/cost)
+MODEL_HIERARCHY = [
+    "claude-haiku-4-5-20251001",
+    "claude-sonnet-4-6",
+    "claude-opus-4-6",
+]
+
 PLAN_LIMITS = {
     "free": {
         "tokens_per_day": 10_000,
-        "model": "claude-haiku-4-5-20251001",
-        "upstream_model": "claude-haiku-4-5-20251001",
+        "model_ceiling": "claude-haiku-4-5-20251001",
     },
     "particulier": {
         "tokens_per_day": 200_000,
-        "model": "claude-sonnet-4-6",
-        "upstream_model": "claude-sonnet-4-6",
+        "model_ceiling": "claude-sonnet-4-6",
     },
     "pro": {
-        "tokens_per_day": 2_000_000,   # effectively unlimited for normal use
-        "model": "claude-opus-4-6",
-        "upstream_model": "claude-opus-4-6",
+        "tokens_per_day": 2_000_000,
+        "model_ceiling": "claude-opus-4-6",
     },
 }
 
