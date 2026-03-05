@@ -140,8 +140,11 @@ async def chat_completions(request: Request, authorization: str = Header(...)):
         ceiling = plan_cfg.get("model_ceiling", "claude-haiku-4-5-20251001")
         requested = body.get("model", ceiling)
         ceiling_idx = MODEL_HIERARCHY.index(ceiling) if ceiling in MODEL_HIERARCHY else 0
-        requested_idx = MODEL_HIERARCHY.index(requested) if requested in MODEL_HIERARCHY else 0
-        body["model"] = requested if requested_idx <= ceiling_idx else ceiling
+        if requested in MODEL_HIERARCHY:
+            requested_idx = MODEL_HIERARCHY.index(requested)
+            body["model"] = requested if requested_idx <= ceiling_idx else ceiling
+        else:
+            body["model"] = ceiling  # unknown model → use plan ceiling
 
         streaming = body.get("stream", False)
 
