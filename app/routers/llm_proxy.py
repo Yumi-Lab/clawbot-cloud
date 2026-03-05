@@ -61,8 +61,6 @@ async def chat_completions(request: Request, authorization: str = Header(...)):
         body = await request.json()
         # Override model with plan-allowed model
         body["model"] = plan_cfg["upstream_model"]
-        # Anthropic requires max_tokens
-        body.setdefault("max_tokens", 4096)
 
         streaming = body.get("stream", False)
 
@@ -72,7 +70,8 @@ async def chat_completions(request: Request, authorization: str = Header(...)):
             "anthropic-version": "2023-06-01",
         }
 
-        payload = json.dumps(body).encode()
+        anthropic_body = _openai_to_anthropic(body)
+        payload = json.dumps(anthropic_body).encode()
         req = urllib.request.Request(
             f"{ANTHROPIC_BASE_URL}/messages",
             data=payload,
@@ -149,6 +148,126 @@ async def chat_completions(request: Request, authorization: str = Header(...)):
 
     finally:
         db.close()
+
+
+def _openai_to_anthropic(body: dict) -> dict:
+    """Convert OpenAI chat.completions request body to Anthropic /messages format."""
+    result: dict = {}
+    result["model"] = body["model"]
+    result["max_tokens"] = body.get("max_tokens", 4096)
+
+    for field in ("temperature", "top_p", "stream"):
+        if field in body:
+            result[field] = body[field]
+    if "stop" in body:
+        stops = body["stop"]
+        result["stop_sequences"] = stops if isinstance(stops, list) else [stops]
+
+    # Extract system messages → top-level system field
+    messages = body.get("messages", [])
+    system_parts: list[str] = []
+    filtered: list[dict] = []
+    for msg in messages:
+        if msg.get("role") == "system":
+            c = msg.get("content", "")
+            if isinstance(c, str):
+                system_parts.append(c)
+            elif isinstance(c, list):
+                system_parts.extend(b.get("text", "") for b in c if b.get("type") == "text")
+        else:
+            filtered.append(msg)
+    if system_parts:
+        result["system"] = "\n\n".join(system_parts)
+
+    # Convert messages
+    anthropic_msgs: list[dict] = []
+    i = 0
+    while i < len(filtered):
+        msg = filtered[i]
+        role = msg.get("role")
+        content = msg.get("content")
+        tool_calls = msg.get("tool_calls")
+
+        if role == "assistant":
+            blocks: list[dict] = []
+            if content:
+                text = content if isinstance(content, str) else " ".join(
+                    b.get("text", "") for b in content if b.get("type") == "text"
+                )
+                if text:
+                    blocks.append({"type": "text", "text": text})
+            if tool_calls:
+                for tc in tool_calls:
+                    fn = tc.get("function", {})
+                    try:
+                        inp = json.loads(fn.get("arguments", "{}"))
+                    except Exception:
+                        inp = {}
+                    blocks.append({
+                        "type": "tool_use",
+                        "id": tc.get("id", f"toolu_{i}"),
+                        "name": fn.get("name", ""),
+                        "input": inp,
+                    })
+            if not blocks:
+                blocks = [{"type": "text", "text": ""}]
+            anthropic_msgs.append({"role": "assistant", "content": blocks})
+            i += 1
+
+        elif role == "tool":
+            # Collect consecutive tool results → single user message
+            tool_results: list[dict] = []
+            while i < len(filtered) and filtered[i].get("role") == "tool":
+                m = filtered[i]
+                tc_content = m.get("content", "")
+                content_blocks = (
+                    [{"type": "text", "text": tc_content}]
+                    if isinstance(tc_content, str)
+                    else tc_content
+                )
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": m.get("tool_call_id", ""),
+                    "content": content_blocks,
+                })
+                i += 1
+            anthropic_msgs.append({"role": "user", "content": tool_results})
+
+        else:  # user
+            if isinstance(content, str):
+                anthropic_msgs.append({"role": "user", "content": content})
+            elif isinstance(content, list):
+                blocks = [{"type": "text", "text": b.get("text", "")} for b in content if b.get("type") == "text"]
+                anthropic_msgs.append({"role": "user", "content": blocks or content})
+            else:
+                anthropic_msgs.append({"role": "user", "content": str(content or "")})
+            i += 1
+
+    result["messages"] = anthropic_msgs
+
+    # Convert tools: OpenAI function schema → Anthropic tool schema
+    if body.get("tools"):
+        result["tools"] = [
+            {
+                "name": t["function"].get("name", ""),
+                "description": t["function"].get("description", ""),
+                "input_schema": t["function"].get("parameters", {"type": "object", "properties": {}}),
+            }
+            for t in body["tools"] if t.get("type") == "function"
+        ]
+
+    # Convert tool_choice: OpenAI string/dict → Anthropic object
+    if "tool_choice" in body:
+        tc = body["tool_choice"]
+        if isinstance(tc, str):
+            mapping = {"auto": {"type": "auto"}, "none": {"type": "none"}, "required": {"type": "any"}}
+            result["tool_choice"] = mapping.get(tc, {"type": "auto"})
+        elif isinstance(tc, dict) and tc.get("type") == "function":
+            result["tool_choice"] = {"type": "tool", "name": tc.get("function", {}).get("name", "")}
+        else:
+            result["tool_choice"] = tc
+
+    return result
 
 
 def _to_openai_format(anthropic_resp: dict) -> dict:
