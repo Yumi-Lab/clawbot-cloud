@@ -334,7 +334,10 @@
 
   <!-- Chat -->
   <div class="chat-section">
-    <div class="chat-header">Chat — Clawbot AI</div>
+    <div class="chat-header" style="display:flex;align-items:center;justify-content:space-between">
+      <span>Chat — Clawbot AI</span>
+      <button class="btn-action" onclick="openFullChat()" style="font-size:11px;padding:4px 12px">Ouvrir le Chat IA complet →</button>
+    </div>
     <div class="chat-messages" id="chat-messages">
       <div class="chat-empty" id="chat-empty">Posez votre première question à Clawbot ↓</div>
     </div>
@@ -575,6 +578,11 @@
 
   function hideTyping() { document.getElementById('typing')?.remove(); }
 
+  function openFullChat() {
+    if (subKey) localStorage.setItem('oj_key', subKey);
+    window.open('/chat', '_blank');
+  }
+
   async function sendChat() {
     const input = document.getElementById('chat-input');
     const content = input.value.trim();
@@ -586,37 +594,60 @@
 
     messages.push({ role: 'user', content });
     appendMsg('user', content);
-    showTyping();
 
+    // Create streaming bubble
+    hideTyping();
+    const container = document.getElementById('chat-messages');
+    document.getElementById('chat-empty')?.remove();
+    const wrap = document.createElement('div');
+    wrap.className = 'msg-wrap assistant';
+    const roleEl = document.createElement('div');
+    roleEl.className = 'msg-role';
+    roleEl.textContent = 'Clawbot';
+    const bubble = document.createElement('div');
+    bubble.className = 'msg-bubble';
+    bubble.textContent = '…';
+    wrap.appendChild(roleEl);
+    wrap.appendChild(bubble);
+    container.appendChild(wrap);
+    container.scrollTop = container.scrollHeight;
+
+    const planModel = userInfo?.model || 'claude-haiku-4-5-20251001';
+    let fullText = '';
     try {
-      const planModel = userInfo?.model || 'clawbot-smart';
       const r = await fetch('/v1/chat/completions', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${subKey}`,
-        },
-        body: JSON.stringify({
-          model: planModel,
-          messages: messages,
-          max_tokens: 2048,
-        }),
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${subKey}` },
+        body: JSON.stringify({ model: planModel, messages, stream: true, max_tokens: 2048 }),
       });
-      const data = await r.json();
-      hideTyping();
-      if (!r.ok) throw new Error(data.detail || JSON.stringify(data));
-      const reply = data.choices?.[0]?.message?.content || '(pas de réponse)';
-      messages.push({ role: 'assistant', content: reply });
-      appendMsg('assistant', reply);
-      // Refresh token count
-      if (userInfo) {
-        const usage = data.usage;
-        if (usage) userInfo.tokens_used_today = (userInfo.tokens_used_today || 0) + (usage.total_tokens || 0);
-        renderUserInfo();
+      if (!r.ok) {
+        const err = await r.text();
+        bubble.textContent = '⚠ Erreur : ' + err.slice(0, 200);
+        return;
       }
+      const reader = r.body.getReader();
+      const dec = new TextDecoder();
+      bubble.textContent = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = dec.decode(value, { stream: true });
+        for (const line of chunk.split('\n')) {
+          if (!line.startsWith('data: ') || line === 'data: [DONE]') continue;
+          try {
+            const d = JSON.parse(line.slice(6));
+            // Custom ClawbotCore format
+            if (d.type === 'done') { fullText = d.content || fullText; bubble.textContent = fullText; continue; }
+            // OpenAI streaming delta
+            const delta = d.choices?.[0]?.delta?.content ?? d.delta?.text ?? d.content ?? null;
+            if (delta) { fullText += delta; bubble.textContent = fullText; container.scrollTop = container.scrollHeight; }
+          } catch {}
+        }
+      }
+      if (!fullText) bubble.textContent = '(pas de réponse)';
+      messages.push({ role: 'assistant', content: fullText });
     } catch (e) {
-      hideTyping();
-      appendMsg('assistant', '⚠ Erreur : ' + e.message);
+      bubble.textContent = '⚠ Erreur : ' + e.message;
     } finally {
       btn.disabled = false;
       input.focus();
