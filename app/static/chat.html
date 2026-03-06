@@ -168,6 +168,37 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 @keyframes tIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
 @keyframes tOut{to{opacity:0;transform:translateY(16px)}}
 
+/* ── MODE BAR ── */
+.chat-mode-btn{padding:3px 12px;border-radius:20px;border:1px solid var(--br);background:transparent;color:var(--td);font-family:var(--fmo);font-size:.62rem;cursor:pointer;transition:var(--tr)}
+.chat-mode-btn.active{background:var(--ac-d);border-color:var(--ac-m);color:var(--ac)}
+.mode-sep{width:1px;height:14px;background:var(--br);flex-shrink:0;margin:0 2px}
+.ctx-bar{display:flex;align-items:center;gap:6px;font-family:var(--fmo);font-size:.58rem;color:var(--td)}
+.ctx-track{width:60px;height:4px;background:var(--bg-i);border-radius:2px;overflow:hidden}
+.ctx-fill{height:100%;background:var(--ac);border-radius:2px;transition:width .4s ease;box-shadow:0 0 6px var(--ac)}
+/* ── TOOL TRACE PANEL ── */
+.tc-wrap{border:1px solid var(--br);border-radius:8px;margin:0 0 8px;overflow:hidden;background:var(--bg);animation:mIn .2s ease}
+.tc-hdr{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;user-select:none;background:var(--bg-c);border-bottom:1px solid transparent;transition:var(--tr)}
+.tc-hdr:hover{background:var(--bg-h)}
+.tc-hdr.open{border-bottom-color:var(--br)}
+.tc-arrow{font-size:.65rem;color:var(--td);transition:transform .2s;display:inline-block}
+.tc-hdr.open .tc-arrow{transform:rotate(90deg)}
+.tc-hdr-txt{font-family:var(--fmo);font-size:.62rem;color:var(--ac);flex:1}
+.tc-spinner{width:10px;height:10px;border:1.5px solid var(--ac-m);border-top-color:var(--ac);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.tc-body{display:none;padding:6px 0;max-height:400px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--br) transparent}
+.tc-hdr.open + .tc-body{display:block}
+.tc-item{display:flex;gap:0;padding:2px 0;animation:mIn .2s ease}
+.tc-gutter{display:flex;flex-direction:column;align-items:center;width:34px;flex-shrink:0;padding-top:5px}
+.tc-dot{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.65rem;flex-shrink:0}
+.tc-dot.call{background:#172a17;color:var(--ok)}
+.tc-dot.res{background:#172030;color:var(--ac2)}
+.tc-dot.err{background:#2a1717;color:var(--er)}
+.tc-vline{width:1px;flex:1;background:var(--br);margin-top:3px;min-height:10px}
+.tc-main{flex:1;min-width:0;padding:3px 12px 3px 0}
+.tc-name{font-family:var(--fmo);font-size:.62rem;font-weight:600;color:var(--tp);margin-bottom:2px}
+.tc-args{font-family:var(--fmo);font-size:.65rem;color:var(--td);white-space:pre-wrap;word-break:break-all;background:var(--bg-i);border-radius:4px;padding:4px 7px;max-height:80px;overflow:hidden;margin:0}
+.tc-result{font-family:var(--fmo);font-size:.65rem;color:var(--ts);white-space:pre-wrap;word-break:break-all;background:var(--bg-i);border-radius:4px;padding:4px 7px;max-height:80px;overflow:hidden;margin:3px 0 0;border-left:2px solid var(--ac-m)}
+.tc-result.err{color:var(--er);border-color:#ff386033;background:#1a0808}
 @media(max-width:640px){.sb{position:fixed;left:0;top:0;bottom:0;z-index:100;box-shadow:8px 0 30px #0008}.sb.col{width:0;box-shadow:none}.welcome-hints{display:none}}
 </style>
 </head>
@@ -241,7 +272,14 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
           </button>
         </div>
         <div class="ft-bar">
-          <span class="ft-hint">Enter to send · Shift+Enter for new line · Haiku recommended (fastest + cheapest)</span>
+          <button class="chat-mode-btn active" id="mode-core" onclick="setChatMode('core')" title="ClawbotCore orchestrator — system tools (bash, python, files...)">Core</button>
+          <button class="chat-mode-btn" id="mode-agent" onclick="setChatMode('agent')" title="Picoclaw native agent — 14 built-in tools">Agent</button>
+          <div class="mode-sep"></div>
+          <span style="font-family:var(--fmo);font-size:.55rem;color:var(--td)">↵ send · ⇧↵ newline</span>
+          <div class="ctx-bar" style="margin-left:auto">
+            <span id="ctx-pct">ctx 0%</span>
+            <div class="ctx-track"><div class="ctx-fill" id="ctx-fill" style="width:0%"></div></div>
+          </div>
         </div>
       </div>
     </div>
@@ -266,7 +304,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 
 <script>
 // ── Config ──────────────────────────────────────────────────────────────────
-const API_URL = 'https://clawbot-api.yumi-lab.com/v1/chat/completions';
+const CLOUD_URL = 'https://clawbot-api.yumi-lab.com';
 const MODELS = {
   'claude-haiku-4-5-20251001': 'haiku',
   'claude-sonnet-4-6': 'sonnet',
@@ -280,6 +318,7 @@ let sessions = JSON.parse(localStorage.getItem('oj_sessions') || '[]');
 let currentId = null;
 let history = []; // [{role, content}]
 let streaming = false;
+let chatMode = localStorage.getItem('oj_mode') || 'core'; // 'core' | 'agent'
 
 // Marked config
 marked.setOptions({
@@ -397,6 +436,102 @@ function saveSession(title) {
   }
   localStorage.setItem('oj_sessions', JSON.stringify(sessions));
   renderSidebar();
+}
+
+// ── Chat Mode ─────────────────────────────────────────────────────────────────
+function setChatMode(m) {
+  chatMode = m;
+  localStorage.setItem('oj_mode', m);
+  ['core', 'agent'].forEach(id => {
+    const el = document.getElementById('mode-' + id);
+    if (el) el.classList.toggle('active', id === m);
+  });
+  const ta = document.getElementById('ft-ta');
+  if (ta) ta.placeholder = m === 'agent'
+    ? 'Ask the agent (can read/write files, run commands, search web...)'
+    : 'Message ClawbotOS...';
+}
+
+// ── Context bar ───────────────────────────────────────────────────────────────
+function updateCtxBar(tokens) {
+  const pct = Math.min(100, Math.round((tokens / 200000) * 100));
+  const el = document.getElementById('ctx-pct');
+  const fill = document.getElementById('ctx-fill');
+  if (el) el.textContent = `ctx ${pct}%`;
+  if (fill) fill.style.width = pct + '%';
+}
+
+// ── Tool trace panel ──────────────────────────────────────────────────────────
+function createTracePanel() {
+  const wrap = document.createElement('div');
+  wrap.className = 'tc-wrap';
+  const hdr = document.createElement('div');
+  hdr.className = 'tc-hdr open';
+  hdr.innerHTML = '<span class="tc-arrow">▼</span><span class="tc-hdr-txt">Working...</span><div class="tc-spinner"></div>';
+  hdr.onclick = () => hdr.classList.toggle('open');
+  const body = document.createElement('div');
+  body.className = 'tc-body';
+  wrap.appendChild(hdr);
+  wrap.appendChild(body);
+  wrap._hdr = hdr;
+  wrap._body = body;
+  return wrap;
+}
+
+function formatToolArgs(name, args) {
+  if (!args || typeof args !== 'object') return String(args || '');
+  if (args.command) return args.command;
+  if (args.code) { const s = String(args.code); return s.length > 200 ? s.slice(0, 200) + '…' : s; }
+  if (args.path && args.content !== undefined) return `write ${args.path} (${String(args.content).length} chars)`;
+  if (args.path) return args.path;
+  const s = JSON.stringify(args, null, 2);
+  return s.length > 200 ? s.slice(0, 200) + '…' : s;
+}
+
+function addToolCallsToTrace(wrap, event, totalCount) {
+  const hdr = wrap._hdr;
+  hdr.querySelector('.tc-hdr-txt').textContent = `Working... (${totalCount} tool call${totalCount > 1 ? 's' : ''})`;
+  for (const call of (event.calls || [])) {
+    const item = document.createElement('div');
+    item.className = 'tc-item';
+    item.dataset.callId = call.id || '';
+    const gutter = document.createElement('div'); gutter.className = 'tc-gutter';
+    const dot = document.createElement('div'); dot.className = 'tc-dot call'; dot.textContent = '⚡';
+    const vline = document.createElement('div'); vline.className = 'tc-vline';
+    gutter.appendChild(dot); gutter.appendChild(vline);
+    const main = document.createElement('div'); main.className = 'tc-main';
+    const nameEl = document.createElement('div'); nameEl.className = 'tc-name'; nameEl.textContent = call.name || call.function?.name || 'tool';
+    const argsEl = document.createElement('pre'); argsEl.className = 'tc-args';
+    argsEl.textContent = formatToolArgs(nameEl.textContent, call.args || call.function?.arguments);
+    main.appendChild(nameEl); main.appendChild(argsEl);
+    item.appendChild(gutter); item.appendChild(main);
+    wrap._body.appendChild(item);
+  }
+}
+
+function addToolResultsToTrace(wrap, event) {
+  const items = Array.from(wrap._body.querySelectorAll('.tc-item')).filter(i => !i.dataset.resolved);
+  (event.results || []).forEach((r, i) => {
+    const item = items[i];
+    if (!item) return;
+    item.dataset.resolved = '1';
+    const dot = item.querySelector('.tc-dot');
+    const txt = String(r.result || r.content || '');
+    const isErr = txt.startsWith('[error]');
+    dot.className = 'tc-dot ' + (isErr ? 'err' : 'res');
+    dot.textContent = isErr ? '✕' : '✓';
+    const resEl = document.createElement('pre');
+    resEl.className = 'tc-result' + (isErr ? ' err' : '');
+    resEl.textContent = txt.length > 400 ? txt.slice(0, 400) + '…' : txt;
+    item.querySelector('.tc-main').appendChild(resEl);
+  });
+}
+
+function finalizeTracePanel(wrap, totalCount) {
+  const hdr = wrap._hdr;
+  hdr.querySelector('.tc-hdr-txt').textContent = `${totalCount} tool call${totalCount > 1 ? 's' : ''} completed`;
+  const spinner = hdr.querySelector('.tc-spinner');
+  if (spinner) spinner.remove();
 }
 
 // ── Model ────────────────────────────────────────────────────────────────────
@@ -523,9 +658,17 @@ async function sendMsg() {
   streaming = true;
   document.getElementById('ft-send').disabled = true;
 
+  const isAgent = chatMode === 'agent';
+  const ep = isAgent
+    ? CLOUD_URL + '/v1/picoclaw-agent'
+    : CLOUD_URL + '/v1/chat/completions';
+
   let full = '';
+  let traceWrap = null;
+  let tcCount = 0;
+
   try {
-    const res = await fetch(API_URL, {
+    const res = await fetch(ep, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -549,7 +692,7 @@ async function sendMsg() {
 
     const reader = res.body.getReader();
     const dec = new TextDecoder();
-    let buf = '';
+    let buf = '', curEvent = null;
 
     while (true) {
       const {done, value} = await reader.read();
@@ -558,18 +701,47 @@ async function sendMsg() {
       const lines = buf.split('\n');
       buf = lines.pop();
       for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
+        if (line.startsWith('event: ')) { curEvent = line.slice(7).trim(); continue; }
+        if (!line.startsWith('data: ')) { if (!line.trim()) curEvent = null; continue; }
         const raw = line.slice(6).trim();
-        if (raw === '[DONE]') break;
+        if (raw === '[DONE]') { curEvent = null; continue; }
         try {
           const d = JSON.parse(raw);
-          const delta = d.choices?.[0]?.delta?.content ?? d.content ?? null;
-          if (delta) {
-            full += delta;
-            bub.innerHTML = parseMarkdown(full);
+          if (curEvent === 'tool_call' && !isAgent) {
+            // Core mode: live tool call
+            if (!traceWrap) {
+              traceWrap = createTracePanel();
+              inner.insertBefore(traceWrap, row);
+            }
+            tcCount += (d.calls?.length || 0);
+            addToolCallsToTrace(traceWrap, d, tcCount);
             scrollBottom();
+            curEvent = null;
+          } else if (curEvent === 'tool_result' && !isAgent) {
+            if (traceWrap) addToolResultsToTrace(traceWrap, d);
+            scrollBottom();
+            curEvent = null;
+          } else if (curEvent === 'done') {
+            // Core mode final answer OR Agent mode final answer
+            full = d.content || '';
+            if (traceWrap) finalizeTracePanel(traceWrap, tcCount);
+            curEvent = null;
+          } else if (curEvent === 'error') {
+            throw new Error(d.message || 'Server error');
+          } else if (curEvent === 'trace') {
+            curEvent = null; // legacy picoclaw trace — ignore for now
+          } else {
+            // Standard OpenAI delta (Core direct / fallback)
+            const delta = d.choices?.[0]?.delta?.content ?? null;
+            if (delta) {
+              full += delta;
+              bub.innerHTML = parseMarkdown(full);
+              scrollBottom();
+            }
           }
-        } catch {}
+        } catch (parseErr) {
+          if (parseErr.message && !parseErr.message.startsWith('JSON')) throw parseErr;
+        }
       }
     }
 
@@ -578,6 +750,11 @@ async function sendMsg() {
     addCopyButtons(bub);
 
     history.push({role: 'bot', content: full});
+
+    // Update ctx bar (rough estimate: 4 chars/token)
+    const totalChars = history.reduce((acc, m) => acc + (m.content?.length || 0), 0);
+    updateCtxBar(Math.round(totalChars / 4));
+
     // Auto-title from first user message
     const title = history.find(m => m.role === 'user')?.content.slice(0, 50) || 'Chat';
     saveSession(title);
@@ -586,6 +763,7 @@ async function sendMsg() {
   } catch (err) {
     bub.textContent = '⚠ ' + err.message;
     bub.classList.add('err');
+    if (traceWrap) { traceWrap._hdr.querySelector('.tc-hdr-txt').textContent = 'Error'; const sp = traceWrap._hdr.querySelector('.tc-spinner'); if (sp) sp.remove(); }
     history.pop();
   } finally {
     bub.classList.remove('streaming');
@@ -607,6 +785,7 @@ function escH(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').r
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 setModel(currentModel);
+setChatMode(chatMode);
 updateKeyDisplay();
 renderSidebar();
 newChat();

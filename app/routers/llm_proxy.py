@@ -140,6 +140,26 @@ def _check_and_record_tokens(user: User, tokens_used: int, db: Session):
     db.commit()
 
 
+@router.post("/v1/picoclaw-agent")
+async def picoclaw_agent(request: Request, authorization: str = Header(...)):
+    """Forward an agent request through the device WebSocket tunnel (picoclaw native agent)."""
+    sub_key = authorization.removeprefix("Bearer ").strip()
+    db = SessionLocal()
+    try:
+        user = _get_user_by_sub_key(sub_key, db)
+        if not user:
+            raise HTTPException(401, "Invalid or inactive subscription key")
+        body = await request.json()
+        body["_endpoint"] = "/v1/picoclaw-agent"  # hint for device routing
+        from app.routers.ws import manager as _mgr
+        device_mac = _mgr.get_online_mac_for_user(user.devices)
+        if not device_mac:
+            raise HTTPException(503, "No device online for this account")
+        return await _route_via_device(device_mac, body, streaming=True)
+    finally:
+        db.close()
+
+
 @router.post("/v1/chat/completions")
 async def chat_completions(request: Request, authorization: str = Header(...)):
     # --- Auth ---
