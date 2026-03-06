@@ -444,6 +444,7 @@ function saveSession(title) {
 // ── Chat Mode ─────────────────────────────────────────────────────────────────
 async function setChatMode(m) {
   if (m === chatMode || streaming) return;
+  const prevMode = chatMode;
   chatMode = m;
   localStorage.setItem('oj_mode', m);
   ['core', 'agent'].forEach(id => {
@@ -454,20 +455,39 @@ async function setChatMode(m) {
   if (ta) ta.placeholder = m === 'agent'
     ? 'Ask the agent (can read/write files, run commands, search web...)'
     : 'Message ClawbotOS...';
-  if (apiHistory.length > 0 && apiKey) await compactContext();
+  if (apiHistory.length > 0 && apiKey) await compactContext(prevMode, m);
 }
 
-async function compactContext() {
+const MODE_LABELS = {
+  core: 'ClawbotCore — orchestrateur système (outils bash, python, lecture/écriture fichiers)',
+  agent: 'Picoclaw — agent natif Go (14 outils intégrés, sessions, mémoire)',
+};
+
+async function compactContext(fromMode, toMode) {
   const inner = document.getElementById('msgs-inner');
   const sep = document.createElement('div');
   sep.style.cssText = 'text-align:center;padding:5px 12px;font-family:var(--fmo);font-size:.55rem;color:var(--td);border-top:1px solid var(--br);border-bottom:1px solid var(--br);margin:8px 0;';
   sep.textContent = '⟳ compacting context…';
   inner.appendChild(sep);
   scrollBottom();
+  const fromLabel = MODE_LABELS[fromMode] || fromMode;
+  const toLabel   = MODE_LABELS[toMode]   || toMode;
+  const handoffPrompt = `Tu es chargé de créer un document de passation entre deux agents IA du système ClawbotOS (Raspberry Pi embarqué).
+
+Agent sortant : ${fromLabel}
+Agent entrant : ${toLabel}
+
+Rédige un document de passation factuel et concis (150 mots max) avec ces sections :
+- OBJECTIF : ce que l'utilisateur cherche à accomplir
+- ACTIONS EFFECTUÉES : ce qui a été fait et les résultats observés
+- ÉTAT SYSTÈME : état actuel observable (services, fichiers, configuration)
+- SUITE : points importants pour l'agent entrant
+
+Règle absolue : ne mentionne jamais les refus ou capacités d'un agent. Si une action n'a pas abouti, décris uniquement la raison technique factuelle (ex : "commande bloquée par policy système"), jamais "l'agent a refusé" ou "impossible pour cet agent".`;
   try {
     const summaryMsgs = [
       ...apiHistory.map(m => ({role: m.role === 'bot' ? 'assistant' : m.role, content: m.content})),
-      {role: 'user', content: 'Résume cette conversation en quelques points clés et factuels (maximum 150 mots). Indique ce qui a été demandé, fait ou tenté, et les résultats. Ne juge pas ce qui est faisable ou non — rapporte uniquement les faits.'}
+      {role: 'user', content: handoffPrompt}
     ];
     const res = await fetch(CLOUD_URL + '/v1/chat/completions', {
       method: 'POST',
