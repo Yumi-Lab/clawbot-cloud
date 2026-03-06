@@ -204,7 +204,7 @@ async def chat_completions(request: Request, authorization: str = Header(...)):
             _upstream_headers = upstream_headers
 
             def stream_gen():
-                """Passthrough SSE stream; parse Anthropic usage events to count tokens."""
+                """Convert Anthropic SSE → OpenAI SSE format; count tokens."""
                 input_tokens = 0
                 output_tokens = 0
                 # Retry once on 429 (TPM rate limit) with backoff
@@ -218,14 +218,25 @@ async def chat_completions(request: Request, authorization: str = Header(...)):
                         )
                         with urllib.request.urlopen(_req, timeout=120) as resp:
                             for raw_line in resp:
-                                yield raw_line
-                                line = raw_line.decode("utf-8", errors="replace").strip()
-                                if not line.startswith("data: ") or line == "data: [DONE]":
+                                line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
+                                if not line.startswith("data: "):
+                                    continue
+                                raw_data = line[6:].strip()
+                                if raw_data == "[DONE]":
                                     continue
                                 try:
-                                    ev = json.loads(line[6:])
+                                    ev = json.loads(raw_data)
                                     t = ev.get("type", "")
-                                    if t == "message_start":
+                                    if t == "content_block_delta":
+                                        delta = ev.get("delta", {})
+                                        if delta.get("type") == "text_delta":
+                                            text = delta.get("text", "").replace("\U0001F99E", "")
+                                            oai = json.dumps({"choices": [{"delta": {"content": text}, "index": 0, "finish_reason": None}]})
+                                            yield f"data: {oai}\n\n".encode()
+                                    elif t == "message_stop":
+                                        finish = json.dumps({"choices": [{"delta": {}, "index": 0, "finish_reason": "stop"}]})
+                                        yield f"data: {finish}\n\ndata: [DONE]\n\n".encode()
+                                    elif t == "message_start":
                                         input_tokens = ev.get("message", {}).get("usage", {}).get("input_tokens", 0)
                                     elif t == "message_delta":
                                         output_tokens = ev.get("usage", {}).get("output_tokens", 0)
