@@ -635,7 +635,7 @@ async function sendMsg() {
 
   removeWelcome();
 
-  history.push({role: 'user', content: msg});
+  history.push({role: 'user', content: msg, mode: chatMode});
   renderMessage('user', msg);
 
   // Create bot bubble (streaming)
@@ -676,7 +676,7 @@ async function sendMsg() {
       },
       body: JSON.stringify({
         model: currentModel,
-        messages: history.map(m => ({role: m.role === 'bot' ? 'assistant' : m.role, content: m.content})),
+        messages: history.filter(m => m.role === 'user' || m.mode === chatMode).map(m => ({role: m.role === 'bot' ? 'assistant' : m.role, content: m.content})),
         stream: true,
         max_tokens: 4096,
       }),
@@ -749,7 +749,7 @@ async function sendMsg() {
     bub.innerHTML = parseMarkdown(full);
     addCopyButtons(bub);
 
-    history.push({role: 'bot', content: full});
+    history.push({role: 'bot', content: full, mode: chatMode});
 
     // Update ctx bar (rough estimate: 4 chars/token)
     const totalChars = history.reduce((acc, m) => acc + (m.content?.length || 0), 0);
