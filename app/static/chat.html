@@ -472,18 +472,32 @@ async function compactContext(fromMode, toMode) {
   scrollBottom();
   const fromLabel = MODE_LABELS[fromMode] || fromMode;
   const toLabel   = MODE_LABELS[toMode]   || toMode;
-  const handoffPrompt = `Tu es chargé de créer un document de passation entre deux agents IA du système ClawbotOS (Raspberry Pi embarqué).
+  // Adaptive max_tokens: proportional to actual conversation length, capped at 600
+  const convLen = apiHistory.reduce((n, m) => n + (m.content?.length || 0), 0);
+  const maxTok = Math.min(600, Math.max(100, Math.round(convLen / 6)));
+  const handoffPrompt = `Tu crées un document de passation de contexte entre deux agents IA du système ClawbotOS (Raspberry Pi embarqué).
 
 Agent sortant : ${fromLabel}
 Agent entrant : ${toLabel}
 
-Rédige un document de passation factuel et concis (150 mots max) avec ces sections :
+ÉTAPE 1 — Analyse la conversation dans des balises <analyse> :
+- Parcours les échanges chronologiquement
+- Identifie la demande réelle de l'utilisateur, ce qui a été fait, les résultats, l'état actuel du système
+- Note ce qui est important pour la continuité
+
+ÉTAPE 2 — Rédige le document de passation dans des balises <passation> :
+Longueur strictement proportionnelle au contenu réel : quelques lignes si la conversation est courte, plusieurs paragraphes si elle est longue.
+N'inclus une section que si elle a du contenu réel — ne remplis pas les sections vides.
+
+Sections disponibles (à inclure uniquement si pertinent) :
 - OBJECTIF : ce que l'utilisateur cherche à accomplir
-- ACTIONS EFFECTUÉES : ce qui a été fait et les résultats observés
-- ÉTAT SYSTÈME : état actuel observable (services, fichiers, configuration)
+- FAIT : actions effectuées et résultats observés
+- ÉTAT SYSTÈME : état observable actuel (fichiers, services, configuration)
 - SUITE : points importants pour l'agent entrant
 
-Règle absolue : ne mentionne jamais les refus ou capacités d'un agent. Si une action n'a pas abouti, décris uniquement la raison technique factuelle (ex : "commande bloquée par policy système"), jamais "l'agent a refusé" ou "impossible pour cet agent".`;
+Règles absolues :
+- Ne mentionne jamais les refus ou limitations d'un agent. Si une action n'a pas abouti, indique uniquement la raison technique factuelle (ex : "commande bloquée par policy système").
+- N'invente rien. Si la conversation ne contient pas d'information pour une section, omets-la.`;
   try {
     const summaryMsgs = [
       ...apiHistory.map(m => ({role: m.role === 'bot' ? 'assistant' : m.role, content: m.content})),
@@ -492,17 +506,20 @@ Règle absolue : ne mentionne jamais les refus ou capacités d'un agent. Si une 
     const res = await fetch(CLOUD_URL + '/v1/chat/completions', {
       method: 'POST',
       headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey},
-      body: JSON.stringify({model: currentModel, messages: summaryMsgs, stream: false, max_tokens: 300}),
+      body: JSON.stringify({model: currentModel, messages: summaryMsgs, stream: false, max_tokens: maxTok}),
     });
     if (!res.ok) throw new Error();
     const data = await res.json();
-    const summary = data.choices?.[0]?.message?.content || '';
+    const raw = data.choices?.[0]?.message?.content || '';
+    // Extract <passation> block (strip <analyse> chain-of-thought like Claude Code strips <analysis>)
+    const match = raw.match(/<passation>([\s\S]*?)<\/passation>/);
+    const summary = match ? match[1].trim() : raw.replace(/<analyse>[\s\S]*?<\/analyse>/g, '').trim();
     if (summary) {
       apiHistory = [
-        {role: 'user', content: '[Contexte résumé]\n' + summary},
-        {role: 'bot', content: 'Contexte pris en compte.'},
+        {role: 'user', content: `[Passation de contexte — ${fromLabel} → ${toLabel}]\n${summary}`},
+        {role: 'bot', content: 'Contexte pris en compte, je continue.'},
       ];
-      sep.textContent = '⟵ mode switch · context compacted';
+      sep.textContent = '⟵ context compacted';
     } else {
       throw new Error();
     }
