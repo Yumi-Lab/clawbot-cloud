@@ -28,11 +28,13 @@ ANTHROPIC_API_KEY  = os.environ.get("ANTHROPIC_API_KEY", "")
 
 # ── Device tunnel routing ──────────────────────────────────────────────────────
 
-async def _route_via_device(mac: str, body: dict):
+async def _route_via_device(mac: str, body: dict, streaming: bool = True):
     """Forward a chat request through the WebSocket tunnel to the user's device.
 
     The device runs the request through its local ClawbotCore (with system tools),
-    then sends back the response via chat_done. We stream it as SSE to the browser.
+    then sends back the response via chat_done.
+    If streaming=True: returns SSE stream to browser.
+    If streaming=False: waits for chat_done and returns OpenAI JSON (for picoclaw / ClawbotCore).
     """
     from app.routers.ws import manager  # lazy import — avoids circular at module load
 
@@ -50,6 +52,33 @@ async def _route_via_device(mac: str, body: dict):
 
     # Mark device busy — prevents ClawbotCore's LLM callbacks from re-routing to device
     manager.start_tunnel(mac)
+
+    if not streaming:
+        # Non-streaming: wait for chat_done, return OpenAI JSON
+        try:
+            try:
+                msg = await asyncio.wait_for(q.get(), timeout=300.0)
+            except asyncio.TimeoutError:
+                raise HTTPException(504, "Device timeout (300s)")
+
+            mtype = msg.get("type")
+            if mtype == "chat_done":
+                content = msg.get("content", "")
+            elif mtype == "chat_error":
+                content = f"⚠ {msg.get('error', 'Unknown device error')}"
+            else:
+                content = ""
+
+            return JSONResponse({
+                "id": f"chatcmpl-{request_id[:8]}",
+                "object": "chat.completion",
+                "model": body.get("model", "clawbot-core"),
+                "choices": [{"index": 0, "message": {"role": "assistant", "content": content}, "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+            })
+        finally:
+            manager.cleanup_request(request_id)
+            manager.end_tunnel(mac)
 
     async def event_gen():
         try:
@@ -132,7 +161,7 @@ async def chat_completions(request: Request, authorization: str = Header(...)):
         from app.routers.ws import manager as _mgr
         device_mac = _mgr.get_online_mac_for_user(user.devices)
         if device_mac:
-            return await _route_via_device(device_mac, body)
+            return await _route_via_device(device_mac, body, streaming=body.get("stream", False))
 
         # No device online — fall through to direct Anthropic call
         # Cap model to plan ceiling
