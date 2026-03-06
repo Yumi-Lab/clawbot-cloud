@@ -316,7 +316,8 @@ let apiKey = localStorage.getItem("oj_key") || localStorage.getItem("clawbot_sub
 let currentModel = localStorage.getItem('oj_model') || 'claude-haiku-4-5-20251001';
 let sessions = JSON.parse(localStorage.getItem('oj_sessions') || '[]');
 let currentId = null;
-let history = []; // [{role, content}]
+let history = []; // display history [{role, content}]
+let apiHistory = []; // API history — compacted on mode switch
 let streaming = false;
 let chatMode = localStorage.getItem('oj_mode') || 'core'; // 'core' | 'agent'
 
@@ -384,6 +385,7 @@ function genId() { return Date.now().toString(36) + Math.random().toString(36).s
 function newChat() {
   currentId = genId();
   history = [];
+  apiHistory = [];
   document.getElementById('msgs-inner').innerHTML = document.getElementById('welcome') ? '' : '';
   // Rebuild welcome
   const inner = document.getElementById('msgs-inner');
@@ -409,6 +411,7 @@ function loadSession(id) {
   if (!s) return;
   currentId = id;
   history = s.messages || [];
+  apiHistory = [...history];
   const inner = document.getElementById('msgs-inner');
   inner.innerHTML = '';
   history.forEach(m => renderMessage(m.role, m.content));
@@ -439,7 +442,8 @@ function saveSession(title) {
 }
 
 // ── Chat Mode ─────────────────────────────────────────────────────────────────
-function setChatMode(m) {
+async function setChatMode(m) {
+  if (m === chatMode || streaming) return;
   chatMode = m;
   localStorage.setItem('oj_mode', m);
   ['core', 'agent'].forEach(id => {
@@ -450,6 +454,42 @@ function setChatMode(m) {
   if (ta) ta.placeholder = m === 'agent'
     ? 'Ask the agent (can read/write files, run commands, search web...)'
     : 'Message ClawbotOS...';
+  if (apiHistory.length > 0 && apiKey) await compactContext();
+}
+
+async function compactContext() {
+  const inner = document.getElementById('msgs-inner');
+  const sep = document.createElement('div');
+  sep.style.cssText = 'text-align:center;padding:5px 12px;font-family:var(--fmo);font-size:.55rem;color:var(--td);border-top:1px solid var(--br);border-bottom:1px solid var(--br);margin:8px 0;';
+  sep.textContent = '⟳ compacting context…';
+  inner.appendChild(sep);
+  scrollBottom();
+  try {
+    const summaryMsgs = [
+      ...apiHistory.map(m => ({role: m.role === 'bot' ? 'assistant' : m.role, content: m.content})),
+      {role: 'user', content: 'Résume cette conversation en quelques points clés et factuels (maximum 150 mots). Indique ce qui a été demandé, fait ou tenté, et les résultats. Ne juge pas ce qui est faisable ou non — rapporte uniquement les faits.'}
+    ];
+    const res = await fetch(CLOUD_URL + '/v1/chat/completions', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey},
+      body: JSON.stringify({model: currentModel, messages: summaryMsgs, stream: false, max_tokens: 300}),
+    });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    const summary = data.choices?.[0]?.message?.content || '';
+    if (summary) {
+      apiHistory = [
+        {role: 'user', content: '[Contexte résumé]\n' + summary},
+        {role: 'bot', content: 'Contexte pris en compte.'},
+      ];
+      sep.textContent = '⟵ mode switch · context compacted';
+    } else {
+      throw new Error();
+    }
+  } catch {
+    apiHistory = [];
+    sep.textContent = '⟵ mode switch · context reset';
+  }
 }
 
 // ── Context bar ───────────────────────────────────────────────────────────────
@@ -635,7 +675,8 @@ async function sendMsg() {
 
   removeWelcome();
 
-  history.push({role: 'user', content: msg, mode: chatMode});
+  history.push({role: 'user', content: msg});
+  apiHistory.push({role: 'user', content: msg});
   renderMessage('user', msg);
 
   // Create bot bubble (streaming)
@@ -676,7 +717,7 @@ async function sendMsg() {
       },
       body: JSON.stringify({
         model: currentModel,
-        messages: history.filter(m => m.role === 'user' || m.mode === chatMode).map(m => ({role: m.role === 'bot' ? 'assistant' : m.role, content: m.content})),
+        messages: apiHistory.map(m => ({role: m.role === 'bot' ? 'assistant' : m.role, content: m.content})),
         stream: true,
         max_tokens: 4096,
       }),
@@ -749,7 +790,8 @@ async function sendMsg() {
     bub.innerHTML = parseMarkdown(full);
     addCopyButtons(bub);
 
-    history.push({role: 'bot', content: full, mode: chatMode});
+    history.push({role: 'bot', content: full});
+    apiHistory.push({role: 'bot', content: full});
 
     // Update ctx bar (rough estimate: 4 chars/token)
     const totalChars = history.reduce((acc, m) => acc + (m.content?.length || 0), 0);
