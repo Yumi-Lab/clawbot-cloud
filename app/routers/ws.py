@@ -79,13 +79,18 @@ class ConnectionManager:
         self._pending.pop(request_id, None)
 
     def get_online_mac_for_user(self, user_devices) -> str | None:
-        """Return the MAC (no colons, uppercase) of the first online, non-busy device."""
+        """Return the MAC (no colons, uppercase) of the first online device.
+
+        Anti-recursion is now handled by the _from_tunnel flag in the request
+        body (set by the device-side clawbot-cloud script), so we no longer
+        block devices that are already processing tunnel requests.  This allows
+        multiple parallel sessions to be routed to the same device.
+        """
         for device in user_devices:
             if not device.mac:
                 continue
             mac_clean = device.mac.replace(":", "").upper()
-            # Skip if device is already processing a tunnel request (prevents recursive loop)
-            if mac_clean in self._connections and mac_clean not in self._tunneling:
+            if mac_clean in self._connections:
                 return mac_clean
         return None
 

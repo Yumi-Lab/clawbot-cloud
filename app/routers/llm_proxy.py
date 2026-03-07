@@ -50,8 +50,8 @@ async def _route_via_device(mac: str, body: dict, streaming: bool = True):
         manager.cleanup_request(request_id)
         raise HTTPException(502, "Device is offline")
 
-    # Mark device busy — prevents ClawbotCore's LLM callbacks from re-routing to device
-    manager.start_tunnel(mac)
+    # Anti-recursion is handled by _from_tunnel flag — no tunnel lock needed.
+    # This allows multiple parallel sessions to the same device.
 
     if not streaming:
         # Non-streaming: wait for chat_done, return OpenAI JSON
@@ -78,7 +78,6 @@ async def _route_via_device(mac: str, body: dict, streaming: bool = True):
             })
         finally:
             manager.cleanup_request(request_id)
-            manager.end_tunnel(mac)
 
     async def event_gen():
         try:
@@ -105,13 +104,14 @@ async def _route_via_device(mac: str, body: dict, streaming: bool = True):
                     yield b"data: [DONE]\n\n"
                     return
                 elif mtype == "chat_chunk":
-                    # Forward raw SSE line (future streaming support)
-                    data = msg.get("data", "")
+                    # Forward SSE event from device to browser
+                    event_type = msg.get("event_type", "data")
+                    data = msg.get("data")
                     if data:
-                        yield (data + "\n").encode()
+                        payload = json.dumps(data)
+                        yield f"event: {event_type}\ndata: {payload}\n\n".encode()
         finally:
             manager.cleanup_request(request_id)
-            manager.end_tunnel(mac)
 
     return StreamingResponse(
         event_gen(),
@@ -177,9 +177,15 @@ async def chat_completions(request: Request, authorization: str = Header(...)):
         # --- Build upstream request ---
         body = await request.json()
 
-        # Route through device if one is online for this user
+        # Route through device if one is online for this user.
+        # Skip device routing if request originates from a device tunnel
+        # (_from_tunnel flag set by device-side clawbot-cloud script).
+        # This prevents the recursive loop: cloud → device → ClawbotCore → cloud → device…
         from app.routers.ws import manager as _mgr
-        device_mac = _mgr.get_online_mac_for_user(user.devices)
+        if body.get("_from_tunnel"):
+            device_mac = None  # force direct Anthropic
+        else:
+            device_mac = _mgr.get_online_mac_for_user(user.devices)
         if device_mac:
             return await _route_via_device(device_mac, body, streaming=body.get("stream", False))
 
