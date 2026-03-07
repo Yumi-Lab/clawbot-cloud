@@ -54,20 +54,23 @@ async def _route_via_device(mac: str, body: dict, streaming: bool = True):
     # This allows multiple parallel sessions to the same device.
 
     if not streaming:
-        # Non-streaming: wait for chat_done, return OpenAI JSON
+        # Non-streaming: loop until chat_done/chat_error, skipping chat_chunk events
         try:
-            try:
-                msg = await asyncio.wait_for(q.get(), timeout=300.0)
-            except asyncio.TimeoutError:
-                raise HTTPException(504, "Device timeout (300s)")
+            content = ""
+            while True:
+                try:
+                    msg = await asyncio.wait_for(q.get(), timeout=300.0)
+                except asyncio.TimeoutError:
+                    raise HTTPException(504, "Device timeout (300s)")
 
-            mtype = msg.get("type")
-            if mtype == "chat_done":
-                content = msg.get("content", "")
-            elif mtype == "chat_error":
-                content = f"⚠ {msg.get('error', 'Unknown device error')}"
-            else:
-                content = ""
+                mtype = msg.get("type")
+                if mtype == "chat_done":
+                    content = msg.get("content", "")
+                    break
+                elif mtype == "chat_error":
+                    content = f"⚠ {msg.get('error', 'Unknown device error')}"
+                    break
+                # Skip chat_chunk (thinking, tool_call, etc.) — only wait for final result
 
             return JSONResponse({
                 "id": f"chatcmpl-{request_id[:8]}",
