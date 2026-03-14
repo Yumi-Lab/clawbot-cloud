@@ -16,7 +16,7 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.config import PLAN_LIMITS, PLAN_ROUTING, PROVIDER_KEYS, PROVIDER_URLS
+from app.config import PLAN_LIMITS, PLAN_ROUTING, PROVIDER_KEYS, PROVIDER_URLS, MODEL_HIERARCHY
 from app.database import SessionLocal
 from app.models import User
 
@@ -198,7 +198,27 @@ async def chat_completions(request: Request, authorization: str = Header(...)):
         routing = PLAN_ROUTING.get(user.plan, PLAN_ROUTING["free"])
         selected = next((r for r in routing if PROVIDER_KEYS.get(r["provider"])), routing[0])
         provider = selected["provider"]
-        body["model"] = selected["model"]
+
+        # Respect user-requested model if within plan ceiling or a Kimi model.
+        requested_model = body.get("model", "")
+        ceiling = plan_cfg["model_ceiling"]
+        if (requested_model
+                and requested_model == "kimi-for-coding"
+                and PROVIDER_KEYS.get("moonshot")):
+            # KimiCode model explicitly requested — always allowed (budget provider)
+            provider = "moonshot"
+            body["model"] = requested_model
+        elif (requested_model
+                and requested_model in MODEL_HIERARCHY
+                and MODEL_HIERARCHY.index(requested_model) <= MODEL_HIERARCHY.index(ceiling)
+                and PROVIDER_KEYS.get("anthropic")):
+            # Anthropic model within plan ceiling
+            provider = "anthropic"
+            body["model"] = requested_model
+        else:
+            body["model"] = selected["model"]
+
+        print(f"[LLM] route: user={user.email} plan={user.plan} provider={provider} model={body.get('model')} from_tunnel={body.get('_from_tunnel', False)}")
 
         streaming = body.get("stream", False)
         _sub_key = sub_key
@@ -232,6 +252,9 @@ async def chat_completions(request: Request, authorization: str = Header(...)):
                                 data=_payload, headers=_upstream_headers, method="POST",
                             )
                             with urllib.request.urlopen(_req, timeout=120) as resp:
+                                finish_reason = "stop"
+                                tool_block_to_idx: dict = {}  # Anthropic block index → OAI tool_calls index
+                                tool_call_count = 0
                                 for raw_line in resp:
                                     line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
                                     if not line.startswith("data: "):
@@ -242,19 +265,37 @@ async def chat_completions(request: Request, authorization: str = Header(...)):
                                     try:
                                         ev = json.loads(raw_data)
                                         t = ev.get("type", "")
-                                        if t == "content_block_delta":
+                                        if t == "content_block_start":
+                                            block = ev.get("content_block", {})
+                                            if block.get("type") == "tool_use":
+                                                block_idx = ev.get("index", 0)
+                                                tc_idx = tool_call_count
+                                                tool_block_to_idx[block_idx] = tc_idx
+                                                tool_call_count += 1
+                                                oai = json.dumps({"choices": [{"delta": {"tool_calls": [{"index": tc_idx, "id": block.get("id", ""), "type": "function", "function": {"name": block.get("name", ""), "arguments": ""}}]}, "index": 0, "finish_reason": None}]})
+                                                yield f"data: {oai}\n\n".encode()
+                                        elif t == "content_block_delta":
                                             delta = ev.get("delta", {})
                                             if delta.get("type") == "text_delta":
                                                 text = delta.get("text", "").replace("\U0001F99E", "")
                                                 oai = json.dumps({"choices": [{"delta": {"content": text}, "index": 0, "finish_reason": None}]})
                                                 yield f"data: {oai}\n\n".encode()
+                                            elif delta.get("type") == "input_json_delta":
+                                                block_idx = ev.get("index", 0)
+                                                tc_idx = tool_block_to_idx.get(block_idx, 0)
+                                                partial = delta.get("partial_json", "")
+                                                oai = json.dumps({"choices": [{"delta": {"tool_calls": [{"index": tc_idx, "function": {"arguments": partial}}]}, "index": 0, "finish_reason": None}]})
+                                                yield f"data: {oai}\n\n".encode()
+                                        elif t == "message_delta":
+                                            output_tokens = ev.get("usage", {}).get("output_tokens", 0)
+                                            stop_reason = ev.get("delta", {}).get("stop_reason", "")
+                                            if stop_reason == "tool_use":
+                                                finish_reason = "tool_calls"
                                         elif t == "message_stop":
-                                            finish = json.dumps({"choices": [{"delta": {}, "index": 0, "finish_reason": "stop"}]})
+                                            finish = json.dumps({"choices": [{"delta": {}, "index": 0, "finish_reason": finish_reason}]})
                                             yield f"data: {finish}\n\ndata: [DONE]\n\n".encode()
                                         elif t == "message_start":
                                             input_tokens = ev.get("message", {}).get("usage", {}).get("input_tokens", 0)
-                                        elif t == "message_delta":
-                                            output_tokens = ev.get("usage", {}).get("output_tokens", 0)
                                     except Exception:
                                         pass
                             break
@@ -316,7 +357,12 @@ async def chat_completions(request: Request, authorization: str = Header(...)):
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {PROVIDER_KEYS[provider]}",
             }
-            payload = json.dumps(body).encode()
+            # KimiCode requires a coding-agent User-Agent to accept requests
+            if provider == "moonshot":
+                upstream_headers["User-Agent"] = "claude-code/1.0"
+            # Strip internal/unsupported fields before sending to upstream provider
+            clean_body = {k: v for k, v in body.items() if not k.startswith("_") and k != "session_id"}
+            payload = json.dumps(clean_body).encode()
             base_url = PROVIDER_URLS[provider]
 
             if streaming:
@@ -336,12 +382,16 @@ async def chat_completions(request: Request, authorization: str = Header(...)):
                                 f"{base_url}/chat/completions",
                                 data=_payload, headers=_upstream_headers, method="POST",
                             )
-                            with urllib.request.urlopen(_req, timeout=120) as resp:
+                            with urllib.request.urlopen(_req, timeout=240) as resp:
                                 for raw_line in resp:
                                     line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
-                                    if not line.startswith("data: "):
+                                    if not line:
                                         continue
-                                    raw_data = line[6:].strip()
+                                    # Handle both "data: {...}" and "data:{...}" (Kimi omits space)
+                                    if line.startswith("data:"):
+                                        raw_data = line[5:].strip()
+                                    else:
+                                        continue
                                     if raw_data == "[DONE]":
                                         yield b"data: [DONE]\n\n"
                                         break
@@ -391,7 +441,7 @@ async def chat_completions(request: Request, authorization: str = Header(...)):
             data = None
             for attempt in range(2):
                 try:
-                    with urllib.request.urlopen(req, timeout=120) as resp:
+                    with urllib.request.urlopen(req, timeout=240) as resp:
                         data = json.loads(resp.read())
                     break
                 except urllib.error.HTTPError as e:
