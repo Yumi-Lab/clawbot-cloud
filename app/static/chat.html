@@ -176,29 +176,21 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .ctx-track{width:60px;height:4px;background:var(--bg-i);border-radius:2px;overflow:hidden}
 .ctx-fill{height:100%;background:var(--ac);border-radius:2px;transition:width .4s ease;box-shadow:0 0 6px var(--ac)}
 /* ── TOOL TRACE PANEL ── */
-.tc-wrap{border:1px solid var(--br);border-radius:8px;margin:0 0 8px;overflow:hidden;background:var(--bg);animation:mIn .2s ease}
-.tc-hdr{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;user-select:none;background:var(--bg-c);border-bottom:1px solid transparent;transition:var(--tr)}
-.tc-hdr:hover{background:var(--bg-h)}
-.tc-hdr.open{border-bottom-color:var(--br)}
-.tc-arrow{font-size:.65rem;color:var(--td);transition:transform .2s;display:inline-block}
-.tc-hdr.open .tc-arrow{transform:rotate(90deg)}
-.tc-hdr-txt{font-family:var(--fmo);font-size:.62rem;color:var(--ac);flex:1}
-.tc-spinner{width:10px;height:10px;border:1.5px solid var(--ac-m);border-top-color:var(--ac);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+/* ─── Timeline trace — Claude Code CLI style ─── */
+.tl-wrap{margin:0 0 10px;border-left:2px solid var(--br);padding-left:12px;display:flex;flex-direction:column;gap:0}
+.tl-row{display:flex;gap:8px;padding:3px 0;align-items:flex-start;animation:mIn .15s ease;font-family:var(--fmo);font-size:.71rem}
+.tl-icon{width:16px;flex-shrink:0;text-align:center;font-size:.7rem;margin-top:1px;line-height:1}
+.tl-body{flex:1;min-width:0}
+.tl-label{font-weight:700;color:var(--tp);margin-bottom:2px}
+.tl-label span{font-weight:400;color:var(--td);margin-left:6px;font-size:.65rem}
+.tl-cmd{color:var(--td);white-space:pre-wrap;word-break:break-all;margin:2px 0;padding:3px 0 3px 8px;border-left:1px solid #2a3a4a;overflow:hidden;max-height:100px;cursor:pointer;transition:max-height .25s ease}
+.tl-cmd.expanded{max-height:none}
+.tl-out{color:var(--ts);white-space:pre-wrap;word-break:break-all;padding:5px 8px;border-left:2px solid var(--ac-m);background:#07121c;border-radius:0 4px 4px 0;margin:3px 0 4px;overflow:hidden;max-height:120px;cursor:pointer;transition:max-height .25s ease}
+.tl-out.expanded{max-height:none}
+.tl-out.err{border-color:#ff386066;color:#ff8080;background:#120808}
+.tl-think{color:var(--td);font-style:italic;opacity:.8;font-size:.68rem}
 @keyframes spin{to{transform:rotate(360deg)}}
-.tc-body{display:none;padding:6px 0;max-height:400px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--br) transparent}
-.tc-hdr.open + .tc-body{display:block}
-.tc-item{display:flex;gap:0;padding:2px 0;animation:mIn .2s ease}
-.tc-gutter{display:flex;flex-direction:column;align-items:center;width:34px;flex-shrink:0;padding-top:5px}
-.tc-dot{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.65rem;flex-shrink:0}
-.tc-dot.call{background:#172a17;color:var(--ok)}
-.tc-dot.res{background:#172030;color:var(--ac2)}
-.tc-dot.err{background:#2a1717;color:var(--er)}
-.tc-vline{width:1px;flex:1;background:var(--br);margin-top:3px;min-height:10px}
-.tc-main{flex:1;min-width:0;padding:3px 12px 3px 0}
-.tc-name{font-family:var(--fmo);font-size:.62rem;font-weight:600;color:var(--tp);margin-bottom:2px}
-.tc-args{font-family:var(--fmo);font-size:.65rem;color:var(--td);white-space:pre-wrap;word-break:break-all;background:var(--bg-i);border-radius:4px;padding:4px 7px;max-height:80px;overflow:hidden;margin:0}
-.tc-result{font-family:var(--fmo);font-size:.65rem;color:var(--ts);white-space:pre-wrap;word-break:break-all;background:var(--bg-i);border-radius:4px;padding:4px 7px;max-height:80px;overflow:hidden;margin:3px 0 0;border-left:2px solid var(--ac-m)}
-.tc-result.err{color:var(--er);border-color:#ff386033;background:#1a0808}
+.tl-spinner{width:9px;height:9px;border:1.5px solid var(--ac-m);border-top-color:var(--ac);border-radius:50%;animation:spin .7s linear infinite;display:inline-block;vertical-align:middle;margin-right:5px}
 @media(max-width:640px){.sb{position:fixed;left:0;top:0;bottom:0;z-index:100;box-shadow:8px 0 30px #0008}.sb.col{width:0;box-shadow:none}.welcome-hints{display:none}}
 </style>
 </head>
@@ -541,74 +533,72 @@ function updateCtxBar(tokens) {
 // ── Tool trace panel ──────────────────────────────────────────────────────────
 function createTracePanel() {
   const wrap = document.createElement('div');
-  wrap.className = 'tc-wrap';
-  const hdr = document.createElement('div');
-  hdr.className = 'tc-hdr open';
-  hdr.innerHTML = '<span class="tc-arrow">▼</span><span class="tc-hdr-txt">Working...</span><div class="tc-spinner"></div>';
-  hdr.onclick = () => hdr.classList.toggle('open');
-  const body = document.createElement('div');
-  body.className = 'tc-body';
-  wrap.appendChild(hdr);
-  wrap.appendChild(body);
-  wrap._hdr = hdr;
-  wrap._body = body;
+  wrap.className = 'tl-wrap';
+  wrap._callRows = []; // track unresolved call rows in order
   return wrap;
 }
 
 function formatToolArgs(name, args) {
   if (!args || typeof args !== 'object') return String(args || '');
-  if (args.command) return args.command;
-  if (args.code) { const s = String(args.code); return s.length > 200 ? s.slice(0, 200) + '…' : s; }
-  if (args.path && args.content !== undefined) return `write ${args.path} (${String(args.content).length} chars)`;
+  if (args.command) return '$ ' + args.command;
+  if (args.code) return args.code;
+  if (args.path && args.content !== undefined) return `✎ ${args.path}\n${args.content}`;
   if (args.path) return args.path;
-  const s = JSON.stringify(args, null, 2);
-  return s.length > 200 ? s.slice(0, 200) + '…' : s;
+  if (args.query) return args.query;
+  if (args.task) return `→ ${args.agent_id || '?'}: ${args.task}`;
+  return JSON.stringify(args, null, 2);
 }
 
-function addToolCallsToTrace(wrap, event, totalCount) {
-  const hdr = wrap._hdr;
-  hdr.querySelector('.tc-hdr-txt').textContent = `Working... (${totalCount} tool call${totalCount > 1 ? 's' : ''})`;
+function addThinkingToTrace(wrap, message) {
+  const row = document.createElement('div');
+  row.className = 'tl-row';
+  row.innerHTML = `<span class="tl-icon" style="color:var(--td)">·</span><span class="tl-think">${message}</span>`;
+  wrap.appendChild(row);
+  scrollBottom();
+}
+
+function addToolCallsToTrace(wrap, event) {
   for (const call of (event.calls || [])) {
-    const item = document.createElement('div');
-    item.className = 'tc-item';
-    item.dataset.callId = call.id || '';
-    const gutter = document.createElement('div'); gutter.className = 'tc-gutter';
-    const dot = document.createElement('div'); dot.className = 'tc-dot call'; dot.textContent = '⚡';
-    const vline = document.createElement('div'); vline.className = 'tc-vline';
-    gutter.appendChild(dot); gutter.appendChild(vline);
-    const main = document.createElement('div'); main.className = 'tc-main';
-    const nameEl = document.createElement('div'); nameEl.className = 'tc-name'; nameEl.textContent = call.name || call.function?.name || 'tool';
-    const argsEl = document.createElement('pre'); argsEl.className = 'tc-args';
-    argsEl.textContent = formatToolArgs(nameEl.textContent, call.args || call.function?.arguments);
-    main.appendChild(nameEl); main.appendChild(argsEl);
-    item.appendChild(gutter); item.appendChild(main);
-    wrap._body.appendChild(item);
+    const name = call.name || call.function?.name || 'tool';
+    const argsRaw = call.args || call.function?.arguments || {};
+    const argsText = formatToolArgs(name, argsRaw);
+    const row = document.createElement('div');
+    row.className = 'tl-row';
+    row.dataset.callId = call.id || '';
+    const labelHtml = `<div class="tl-label">● ${name}<span>running…</span></div>`;
+    const argsHtml = argsText ? `<pre class="tl-cmd">${argsText.replace(/</g,'&lt;')}</pre>` : '';
+    row.innerHTML = `<span class="tl-icon" style="color:var(--ok)">◉</span><div class="tl-body">${labelHtml}${argsHtml}</div>`;
+    const cmd = row.querySelector('.tl-cmd');
+    if (cmd) cmd.onclick = () => cmd.classList.toggle('expanded');
+    wrap.appendChild(row);
+    wrap._callRows.push(row);
+    scrollBottom();
   }
 }
 
 function addToolResultsToTrace(wrap, event) {
-  const items = Array.from(wrap._body.querySelectorAll('.tc-item')).filter(i => !i.dataset.resolved);
+  const pending = wrap._callRows.filter(r => !r.dataset.resolved);
   (event.results || []).forEach((r, i) => {
-    const item = items[i];
-    if (!item) return;
-    item.dataset.resolved = '1';
-    const dot = item.querySelector('.tc-dot');
-    const txt = String(r.result || r.content || '');
-    const isErr = txt.startsWith('[error]');
-    dot.className = 'tc-dot ' + (isErr ? 'err' : 'res');
-    dot.textContent = isErr ? '✕' : '✓';
-    const resEl = document.createElement('pre');
-    resEl.className = 'tc-result' + (isErr ? ' err' : '');
-    resEl.textContent = txt.length > 400 ? txt.slice(0, 400) + '…' : txt;
-    item.querySelector('.tc-main').appendChild(resEl);
+    const row = pending[i];
+    if (!row) return;
+    row.dataset.resolved = '1';
+    const txt = String(r.result || r.content || '(empty)');
+    const isErr = txt.startsWith('[error]') || txt.startsWith('Error');
+    const icon = row.querySelector('.tl-icon');
+    if (icon) { icon.textContent = isErr ? '✕' : '✓'; icon.style.color = isErr ? 'var(--er)' : 'var(--ac2)'; }
+    const label = row.querySelector('.tl-label span');
+    if (label) label.remove();
+    const out = document.createElement('pre');
+    out.className = 'tl-out' + (isErr ? ' err' : '');
+    out.textContent = txt;
+    out.onclick = () => out.classList.toggle('expanded');
+    row.querySelector('.tl-body').appendChild(out);
+    scrollBottom();
   });
 }
 
 function finalizeTracePanel(wrap, totalCount) {
-  const hdr = wrap._hdr;
-  hdr.querySelector('.tc-hdr-txt').textContent = `${totalCount} tool call${totalCount > 1 ? 's' : ''} completed`;
-  const spinner = hdr.querySelector('.tc-spinner');
-  if (spinner) spinner.remove();
+  // Nothing to finalize — timeline stays open
 }
 
 // ── Model ────────────────────────────────────────────────────────────────────
@@ -792,7 +782,7 @@ async function sendMsg() {
               inner.insertBefore(traceWrap, row);
             }
             tcCount += (d.calls?.length || 0);
-            addToolCallsToTrace(traceWrap, d, tcCount);
+            addToolCallsToTrace(traceWrap, d);
             scrollBottom();
             curEvent = null;
           } else if (curEvent === 'tool_result' && !isAgent) {
@@ -806,6 +796,15 @@ async function sendMsg() {
             curEvent = null;
           } else if (curEvent === 'error') {
             throw new Error(d.message || 'Server error');
+          } else if (curEvent === 'thinking') {
+            // Always show thinking as a trace line — create trace panel if needed
+            if (!traceWrap) {
+              traceWrap = createTracePanel();
+              inner.insertBefore(traceWrap, row);
+            }
+            addThinkingToTrace(traceWrap, d.message || '…');
+            scrollBottom();
+            curEvent = null;
           } else if (curEvent === 'trace') {
             curEvent = null; // legacy picoclaw trace — ignore for now
           } else {

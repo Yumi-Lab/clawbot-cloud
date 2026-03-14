@@ -16,7 +16,7 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.config import PLAN_LIMITS
+from app.config import PLAN_LIMITS, PLAN_ROUTING, PROVIDER_KEYS, PROVIDER_URLS
 from app.database import SessionLocal
 from app.models import User
 
@@ -59,9 +59,9 @@ async def _route_via_device(mac: str, body: dict, streaming: bool = True):
             content = ""
             while True:
                 try:
-                    msg = await asyncio.wait_for(q.get(), timeout=300.0)
+                    msg = await asyncio.wait_for(q.get(), timeout=600.0)
                 except asyncio.TimeoutError:
-                    raise HTTPException(504, "Device timeout (300s)")
+                    raise HTTPException(504, "Device timeout (600s)")
 
                 mtype = msg.get("type")
                 if mtype == "chat_done":
@@ -86,9 +86,9 @@ async def _route_via_device(mac: str, body: dict, streaming: bool = True):
         try:
             while True:
                 try:
-                    msg = await asyncio.wait_for(q.get(), timeout=300.0)
+                    msg = await asyncio.wait_for(q.get(), timeout=600.0)
                 except asyncio.TimeoutError:
-                    payload = json.dumps({"type": "done", "content": "⚠ Device timeout (300s)"})
+                    payload = json.dumps({"type": "done", "content": "⚠ Device timeout (600s)"})
                     yield f"event: done\ndata: {payload}\n\n".encode()
                     yield b"data: [DONE]\n\n"
                     return
@@ -192,138 +192,222 @@ async def chat_completions(request: Request, authorization: str = Header(...)):
         if device_mac:
             return await _route_via_device(device_mac, body, streaming=body.get("stream", False))
 
-        # No device online — fall through to direct Anthropic call
-        # Cap model to plan ceiling
-        from app.config import MODEL_HIERARCHY
-        ceiling = plan_cfg.get("model_ceiling", "claude-haiku-4-5-20251001")
-        requested = body.get("model", ceiling)
-        ceiling_idx = MODEL_HIERARCHY.index(ceiling) if ceiling in MODEL_HIERARCHY else 0
-        if requested in MODEL_HIERARCHY:
-            requested_idx = MODEL_HIERARCHY.index(requested)
-            body["model"] = requested if requested_idx <= ceiling_idx else ceiling
-        else:
-            body["model"] = ceiling  # unknown model → use plan ceiling
+        # No device online — fall through to direct LLM call via selected provider.
+        # Provider is chosen from PLAN_ROUTING based on user plan.
+        # Pi is blind: it never knows which provider/model is actually used.
+        routing = PLAN_ROUTING.get(user.plan, PLAN_ROUTING["free"])
+        selected = next((r for r in routing if PROVIDER_KEYS.get(r["provider"])), routing[0])
+        provider = selected["provider"]
+        body["model"] = selected["model"]
 
         streaming = body.get("stream", False)
+        _sub_key = sub_key
 
-        upstream_headers = {
-            "Content-Type": "application/json",
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
-        }
+        if provider == "anthropic":
+            # ── Anthropic path (native format conversion) ──────────────────
+            upstream_headers = {
+                "Content-Type": "application/json",
+                "x-api-key": PROVIDER_KEYS["anthropic"],
+                "anthropic-version": "2023-06-01",
+            }
+            anthropic_body = _openai_to_anthropic(body)
+            payload = json.dumps(anthropic_body).encode()
+            base_url = PROVIDER_URLS["anthropic"]
 
-        anthropic_body = _openai_to_anthropic(body)
-        payload = json.dumps(anthropic_body).encode()
-        req = urllib.request.Request(
-            f"{ANTHROPIC_BASE_URL}/messages",
-            data=payload,
-            headers=upstream_headers,
-            method="POST",
-        )
+            if streaming:
+                limit = plan_cfg["tokens_per_day"]
+                if user.tokens_used_today >= limit:
+                    raise HTTPException(429, f"Daily token limit reached ({limit} tokens/day)")
 
-        if streaming:
-            # Pre-check: refuse if already over limit (rough guard before stream starts)
-            limit = plan_cfg["tokens_per_day"]
-            if user.tokens_used_today >= limit:
-                raise HTTPException(429, f"Daily token limit reached ({limit} tokens/day)")
+                _payload = payload
+                _upstream_headers = upstream_headers
 
-            # Capture sub_key for post-stream token recording (db will be closed by then)
-            _sub_key = sub_key
-            _payload = payload
-            _upstream_headers = upstream_headers
-
-            def stream_gen():
-                """Convert Anthropic SSE → OpenAI SSE format; count tokens."""
-                input_tokens = 0
-                output_tokens = 0
-                # Retry once on 429 (TPM rate limit) with backoff
-                for attempt in range(2):
+                def stream_gen():
+                    input_tokens = 0
+                    output_tokens = 0
+                    for attempt in range(2):
+                        try:
+                            _req = urllib.request.Request(
+                                f"{base_url}/messages",
+                                data=_payload, headers=_upstream_headers, method="POST",
+                            )
+                            with urllib.request.urlopen(_req, timeout=120) as resp:
+                                for raw_line in resp:
+                                    line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
+                                    if not line.startswith("data: "):
+                                        continue
+                                    raw_data = line[6:].strip()
+                                    if raw_data == "[DONE]":
+                                        continue
+                                    try:
+                                        ev = json.loads(raw_data)
+                                        t = ev.get("type", "")
+                                        if t == "content_block_delta":
+                                            delta = ev.get("delta", {})
+                                            if delta.get("type") == "text_delta":
+                                                text = delta.get("text", "").replace("\U0001F99E", "")
+                                                oai = json.dumps({"choices": [{"delta": {"content": text}, "index": 0, "finish_reason": None}]})
+                                                yield f"data: {oai}\n\n".encode()
+                                        elif t == "message_stop":
+                                            finish = json.dumps({"choices": [{"delta": {}, "index": 0, "finish_reason": "stop"}]})
+                                            yield f"data: {finish}\n\ndata: [DONE]\n\n".encode()
+                                        elif t == "message_start":
+                                            input_tokens = ev.get("message", {}).get("usage", {}).get("input_tokens", 0)
+                                        elif t == "message_delta":
+                                            output_tokens = ev.get("usage", {}).get("output_tokens", 0)
+                                    except Exception:
+                                        pass
+                            break
+                        except urllib.error.HTTPError as e:
+                            err_body = e.read().decode(errors="replace")
+                            if e.code == 429 and attempt == 0:
+                                time.sleep(60)
+                                continue
+                            yield f"data: {{\"error\": {{\"code\": {e.code}, \"message\": \"{err_body[:200].replace(chr(34), chr(39))}\" }} }}\n\n".encode()
+                            yield b"data: [DONE]\n\n"
+                            return
+                        except Exception as e:
+                            yield f"data: {{\"error\": {{\"message\": \"{e}\" }} }}\n\n".encode()
+                            yield b"data: [DONE]\n\n"
+                            return
+                    _db = SessionLocal()
                     try:
-                        _req = urllib.request.Request(
-                            f"{ANTHROPIC_BASE_URL}/messages",
-                            data=_payload,
-                            headers=_upstream_headers,
-                            method="POST",
-                        )
-                        with urllib.request.urlopen(_req, timeout=120) as resp:
-                            for raw_line in resp:
-                                line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
-                                if not line.startswith("data: "):
-                                    continue
-                                raw_data = line[6:].strip()
-                                if raw_data == "[DONE]":
-                                    continue
-                                try:
-                                    ev = json.loads(raw_data)
-                                    t = ev.get("type", "")
-                                    if t == "content_block_delta":
-                                        delta = ev.get("delta", {})
-                                        if delta.get("type") == "text_delta":
-                                            text = delta.get("text", "").replace("\U0001F99E", "")
-                                            oai = json.dumps({"choices": [{"delta": {"content": text}, "index": 0, "finish_reason": None}]})
-                                            yield f"data: {oai}\n\n".encode()
-                                    elif t == "message_stop":
-                                        finish = json.dumps({"choices": [{"delta": {}, "index": 0, "finish_reason": "stop"}]})
-                                        yield f"data: {finish}\n\ndata: [DONE]\n\n".encode()
-                                    elif t == "message_start":
-                                        input_tokens = ev.get("message", {}).get("usage", {}).get("input_tokens", 0)
-                                    elif t == "message_delta":
-                                        output_tokens = ev.get("usage", {}).get("output_tokens", 0)
-                                except Exception:
-                                    pass
-                        break  # success
-                    except urllib.error.HTTPError as e:
-                        err_body = e.read().decode(errors="replace")
-                        if e.code == 429 and attempt == 0:
-                            time.sleep(60)  # wait 1 min then retry
-                            continue
-                        yield f"data: {{\"error\": {{\"code\": {e.code}, \"message\": \"{err_body[:200].replace(chr(34), chr(39))}\" }} }}\n\n".encode()
-                        yield b"data: [DONE]\n\n"
-                        return
-                    except Exception as e:
-                        yield f"data: {{\"error\": {{\"message\": \"{e}\" }} }}\n\n".encode()
-                        yield b"data: [DONE]\n\n"
-                        return
+                        _user = _get_user_by_sub_key(_sub_key, _db)
+                        if _user and (input_tokens + output_tokens) > 0:
+                            _reset_daily_tokens_if_needed(_user, _db)
+                            _user.tokens_used_today = (_user.tokens_used_today or 0) + input_tokens + output_tokens
+                            _db.commit()
+                    except Exception:
+                        pass
+                    finally:
+                        _db.close()
 
-                # Record token usage after stream completes
-                _db = SessionLocal()
+                return StreamingResponse(stream_gen(), media_type="text/event-stream")
+
+            # Non-streaming Anthropic
+            req = urllib.request.Request(
+                f"{base_url}/messages", data=payload, headers=upstream_headers, method="POST",
+            )
+            data = None
+            for attempt in range(2):
                 try:
-                    _user = _get_user_by_sub_key(_sub_key, _db)
-                    if _user and (input_tokens + output_tokens) > 0:
-                        _reset_daily_tokens_if_needed(_user, _db)
-                        _user.tokens_used_today = (_user.tokens_used_today or 0) + input_tokens + output_tokens
-                        _db.commit()
-                except Exception:
-                    pass
-                finally:
-                    _db.close()
+                    with urllib.request.urlopen(req, timeout=120) as resp:
+                        data = json.loads(resp.read())
+                    break
+                except urllib.error.HTTPError as e:
+                    err_body = e.read().decode(errors="replace")
+                    if e.code == 429 and attempt == 0:
+                        await asyncio.sleep(60)
+                        continue
+                    raise HTTPException(e.code, err_body[:500])
+                except Exception as e:
+                    raise HTTPException(502, f"Upstream error: {e}")
+            if data is None:
+                raise HTTPException(502, "No response from upstream")
+            usage = data.get("usage", {})
+            tokens_used = usage.get("input_tokens", 0) + usage.get("output_tokens", 0)
+            _check_and_record_tokens(user, tokens_used, db)
+            return JSONResponse(_to_openai_format(data))
 
-            return StreamingResponse(stream_gen(), media_type="text/event-stream")
+        else:
+            # ── OpenAI-compatible path (Moonshot/Kimi, Deepseek, OpenAI, etc.) ──
+            # These providers natively use the OpenAI format — no conversion needed.
+            upstream_headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {PROVIDER_KEYS[provider]}",
+            }
+            payload = json.dumps(body).encode()
+            base_url = PROVIDER_URLS[provider]
 
-        # Non-streaming — retry once on 429 (TPM rate limit)
-        data = None
-        for attempt in range(2):
-            try:
-                with urllib.request.urlopen(req, timeout=120) as resp:
-                    data = json.loads(resp.read())
-                break
-            except urllib.error.HTTPError as e:
-                err_body = e.read().decode(errors="replace")
-                if e.code == 429 and attempt == 0:
-                    time.sleep(60)
-                    continue
-                raise HTTPException(e.code, err_body[:500])
-            except Exception as e:
-                raise HTTPException(502, f"Upstream error: {e}")
+            if streaming:
+                limit = plan_cfg["tokens_per_day"]
+                if user.tokens_used_today >= limit:
+                    raise HTTPException(429, f"Daily token limit reached ({limit} tokens/day)")
 
-        # Record token usage
-        usage = data.get("usage", {})
-        tokens_used = usage.get("input_tokens", 0) + usage.get("output_tokens", 0)
-        _check_and_record_tokens(user, tokens_used, db)
+                _payload = payload
+                _upstream_headers = upstream_headers
 
-        # Normalize Anthropic response → OpenAI format
-        openai_resp = _to_openai_format(data)
-        return JSONResponse(openai_resp)
+                def stream_gen():  # noqa: F811
+                    input_tokens = 0
+                    output_tokens = 0
+                    for attempt in range(2):
+                        try:
+                            _req = urllib.request.Request(
+                                f"{base_url}/chat/completions",
+                                data=_payload, headers=_upstream_headers, method="POST",
+                            )
+                            with urllib.request.urlopen(_req, timeout=120) as resp:
+                                for raw_line in resp:
+                                    line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
+                                    if not line.startswith("data: "):
+                                        continue
+                                    raw_data = line[6:].strip()
+                                    if raw_data == "[DONE]":
+                                        yield b"data: [DONE]\n\n"
+                                        break
+                                    try:
+                                        ev = json.loads(raw_data)
+                                        # Count tokens if present
+                                        usage = ev.get("usage") or {}
+                                        if usage.get("prompt_tokens"):
+                                            input_tokens = usage["prompt_tokens"]
+                                        if usage.get("completion_tokens"):
+                                            output_tokens = usage["completion_tokens"]
+                                        # Forward as-is (already OpenAI format)
+                                        yield f"data: {raw_data}\n\n".encode()
+                                    except Exception:
+                                        yield f"data: {raw_data}\n\n".encode()
+                            break
+                        except urllib.error.HTTPError as e:
+                            err_body = e.read().decode(errors="replace")
+                            if e.code == 429 and attempt == 0:
+                                time.sleep(60)
+                                continue
+                            yield f"data: {{\"error\": {{\"code\": {e.code}, \"message\": \"{err_body[:200].replace(chr(34), chr(39))}\" }} }}\n\n".encode()
+                            yield b"data: [DONE]\n\n"
+                            return
+                        except Exception as e:
+                            yield f"data: {{\"error\": {{\"message\": \"{e}\" }} }}\n\n".encode()
+                            yield b"data: [DONE]\n\n"
+                            return
+                    _db = SessionLocal()
+                    try:
+                        _user = _get_user_by_sub_key(_sub_key, _db)
+                        if _user and (input_tokens + output_tokens) > 0:
+                            _reset_daily_tokens_if_needed(_user, _db)
+                            _user.tokens_used_today = (_user.tokens_used_today or 0) + input_tokens + output_tokens
+                            _db.commit()
+                    except Exception:
+                        pass
+                    finally:
+                        _db.close()
+
+                return StreamingResponse(stream_gen(), media_type="text/event-stream")
+
+            # Non-streaming OpenAI-compatible
+            req = urllib.request.Request(
+                f"{base_url}/chat/completions", data=payload, headers=upstream_headers, method="POST",
+            )
+            data = None
+            for attempt in range(2):
+                try:
+                    with urllib.request.urlopen(req, timeout=120) as resp:
+                        data = json.loads(resp.read())
+                    break
+                except urllib.error.HTTPError as e:
+                    err_body = e.read().decode(errors="replace")
+                    if e.code == 429 and attempt == 0:
+                        await asyncio.sleep(60)
+                        continue
+                    raise HTTPException(e.code, err_body[:500])
+                except Exception as e:
+                    raise HTTPException(502, f"Upstream error: {e}")
+            if data is None:
+                raise HTTPException(502, "No response from upstream")
+            usage = data.get("usage", {})
+            tokens_used = usage.get("prompt_tokens", 0) + usage.get("completion_tokens", 0)
+            _check_and_record_tokens(user, tokens_used, db)
+            return JSONResponse(data)
 
     finally:
         db.close()
