@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ClawbotOS · Chat</title>
+<title>OpenJarvis · Chat</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
@@ -203,7 +203,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
     <div class="sb-logo">
       <div class="sb-logo-icon">🤖</div>
       <div>
-        <div class="sb-logo-txt">ClawbotOS</div>
+        <div class="sb-logo-txt">OpenJarvis</div>
         <div class="sb-logo-sub">openjarvis.io · AI Chat</div>
       </div>
     </div>
@@ -242,7 +242,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
     <div class="msgs-inner" id="msgs-inner">
       <div class="welcome" id="welcome">
         <div class="welcome-logo">🤖</div>
-        <h1>ClawbotOS AI</h1>
+        <h1>OpenJarvis</h1>
         <p>Your AI assistant powered by Anthropic Claude. Ask anything — from system administration to code, analysis, and more.</p>
         <div class="welcome-hints">
           <div class="hint-chip" onclick="useHint(this)">Explain how Docker works</div>
@@ -258,7 +258,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
     <div class="ft-inner">
       <div class="ft-box">
         <div class="ft-row">
-          <textarea class="ft-ta" id="ft-ta" rows="1" placeholder="Message ClawbotOS..." onkeydown="handleKey(event)" oninput="autoH(this)"></textarea>
+          <textarea class="ft-ta" id="ft-ta" rows="1" placeholder="Message OpenJarvis..." onkeydown="handleKey(event)" oninput="autoH(this)"></textarea>
           <button class="ft-send" id="ft-send" onclick="sendMsg()" title="Send (Enter)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
           </button>
@@ -284,7 +284,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 <div class="modal-bg" id="key-modal" style="display:none" onclick="if(e.target===this)closeKeyModal()">
   <div class="modal" onclick="event.stopPropagation()">
     <h2>Subscription Key</h2>
-    <p>Enter your ClawbotOS subscription key to start chatting. Your key is stored locally and never sent anywhere except the API.</p>
+    <p>Enter your OpenJarvis subscription key to start chatting. Your key is stored locally and never sent anywhere except the API.</p>
     <input class="modal-fi" type="password" id="key-inp" placeholder="clb-p-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" autocomplete="off">
     <div class="modal-btns">
       <button class="modal-btn cancel" onclick="closeKeyModal()">Cancel</button>
@@ -384,7 +384,7 @@ function newChat() {
   inner.innerHTML = `
     <div class="welcome" id="welcome">
       <div class="welcome-logo">🤖</div>
-      <h1>ClawbotOS AI</h1>
+      <h1>OpenJarvis</h1>
       <p>Your AI assistant powered by Anthropic Claude. Ask anything — from system administration to code, analysis, and more.</p>
       <div class="welcome-hints">
         <div class="hint-chip" onclick="useHint(this)">Explain how Docker works</div>
@@ -446,7 +446,7 @@ async function setChatMode(m) {
   const ta = document.getElementById('ft-ta');
   if (ta) ta.placeholder = m === 'agent'
     ? 'Ask the agent (can read/write files, run commands, search web...)'
-    : 'Message ClawbotOS...';
+    : 'Message OpenJarvis...';
   if (apiHistory.length > 0 && apiKey) await compactContext(prevMode, m);
 }
 
@@ -467,7 +467,7 @@ async function compactContext(fromMode, toMode) {
   // Adaptive max_tokens: proportional to actual conversation length, capped at 600
   const convLen = apiHistory.reduce((n, m) => n + (m.content?.length || 0), 0);
   const maxTok = Math.min(600, Math.max(100, Math.round(convLen / 6)));
-  const handoffPrompt = `Tu crées un document de passation de contexte entre deux agents IA du système ClawbotOS (Raspberry Pi embarqué).
+  const handoffPrompt = `Tu crées un document de passation de contexte entre deux agents IA du système OpenJarvis (Raspberry Pi embarqué).
 
 Agent sortant : ${fromLabel}
 Agent entrant : ${toLabel}
