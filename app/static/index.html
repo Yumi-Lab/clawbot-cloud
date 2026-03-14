@@ -1,341 +1,425 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Clawbot Cloud — Yumi Lab</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --bg:           #0a0908;
-      --bg-card:      #0f0e0c;
-      --border:       #1e1b14;
-      --border-focus: #ffb300;
-      --text:         #e8d5a3;
-      --text-dim:     #8a7a58;
-      --text-muted:   #4a3e28;
-      --accent:       #ffb300;
-      --accent-soft:  rgba(255,179,0,0.07);
-      --danger:       #ff5533;
-      --success:      #44dd88;
-      --font:         'IBM Plex Mono', monospace;
-    }
-
-    [data-theme="light"] {
-      --bg:           #f5f2ec;
-      --bg-card:      #eae6dc;
-      --border:       #c8bfa8;
-      --border-focus: #b87800;
-      --text:         #1a1610;
-      --text-dim:     #4a3e28;
-      --text-muted:   #8a7a58;
-      --accent:       #b87800;
-      --accent-soft:  rgba(184,120,0,0.1);
-      --danger:       #cc2200;
-      --success:      #1a8844;
-    }
-    [data-theme="light"] body::after { display: none; }
-
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: var(--font);
-      font-size: 13px;
-      line-height: 1.6;
-      height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
-    }
-
-    body::after {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background: repeating-linear-gradient(
-        0deg, transparent, transparent 2px,
-        rgba(0,0,0,0.025) 2px, rgba(0,0,0,0.025) 4px
-      );
-      pointer-events: none;
-      z-index: 999;
-    }
-
-    .container {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      width: 900px;
-      height: 560px;
-      border: 1px solid var(--border);
-      box-shadow: 0 0 60px rgba(255,179,0,0.04);
-    }
-
-    /* ── Brand panel ── */
-    .brand-panel {
-      padding: 44px 48px;
-      border-right: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      background: var(--bg-card);
-      position: relative;
-      overflow: hidden;
-    }
-    .brand-panel::before {
-      content: '';
-      position: absolute;
-      top: -80px; left: -80px;
-      width: 360px; height: 360px;
-      background: radial-gradient(circle, rgba(255,179,0,0.05) 0%, transparent 70%);
-      pointer-events: none;
-    }
-
-    .logo { font-size: 20px; font-weight: 600; letter-spacing: 0.15em; color: var(--accent); }
-    .logo-sub { font-size: 10px; letter-spacing: 0.2em; color: var(--text-muted); margin-top: 3px; text-transform: uppercase; }
-
-    .brand-mid { display: flex; flex-direction: column; gap: 20px; }
-    .brand-title { font-size: 26px; font-weight: 300; line-height: 1.3; }
-    .brand-title strong { color: var(--accent); font-weight: 600; }
-
-    .feature-list { list-style: none; display: flex; flex-direction: column; gap: 7px; }
-    .feature-list li { font-size: 11px; color: var(--text-dim); display: flex; align-items: center; gap: 8px; }
-    .feature-list li::before { content: '▸'; color: var(--accent); flex-shrink: 0; }
-
-    .plan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .plan-chip { border: 1px solid var(--border); padding: 10px 12px; }
-    .plan-chip .pname { font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--accent); font-weight: 500; }
-    .plan-chip .pprice { font-size: 18px; font-weight: 600; color: var(--text); margin-top: 2px; }
-    .plan-chip .ptokens { font-size: 10px; color: var(--text-dim); margin-top: 1px; }
-
-    /* ── Auth panel ── */
-    .auth-panel {
-      padding: 44px 48px;
-      display: flex;
-      flex-direction: column;
-      gap: 28px;
-    }
-
-    .auth-header { display: flex; flex-direction: column; gap: 3px; }
-    .auth-title { font-size: 14px; font-weight: 500; letter-spacing: 0.1em; color: var(--text); }
-    .auth-sub { font-size: 10px; color: var(--text-dim); }
-
-    .tabs { display: flex; border-bottom: 1px solid var(--border); }
-    .tab {
-      background: none; border: none; border-bottom: 2px solid transparent;
-      color: var(--text-dim); font-family: var(--font); font-size: 10px;
-      letter-spacing: 0.15em; padding: 7px 16px 9px; cursor: pointer;
-      margin-bottom: -1px; transition: all 0.12s; text-transform: uppercase;
-    }
-    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-    .tab:hover:not(.active) { color: var(--text); }
-
-    form { display: flex; flex-direction: column; gap: 14px; flex: 1; }
-
-    .field { display: flex; flex-direction: column; gap: 5px; }
-    label { font-size: 9px; letter-spacing: 0.18em; color: var(--text-dim); text-transform: uppercase; }
-
-    input, select {
-      background: var(--bg); border: 1px solid var(--border);
-      color: var(--text); font-family: var(--font); font-size: 13px;
-      padding: 9px 11px; outline: none; transition: border-color 0.12s; width: 100%;
-    }
-    input::placeholder { color: var(--text-muted); }
-    input:focus, select:focus { border-color: var(--border-focus); }
-    select option { background: var(--bg-card); }
-
-    .btn {
-      background: var(--accent); border: none; color: #0a0908;
-      font-family: var(--font); font-size: 11px; font-weight: 600;
-      letter-spacing: 0.18em; padding: 11px; cursor: pointer;
-      text-transform: uppercase; transition: opacity 0.12s; margin-top: auto;
-    }
-    .btn:hover { opacity: 0.88; }
-    .btn:active { opacity: 0.75; }
-    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
-
-    .msg { font-size: 11px; padding: 7px 10px; border: 1px solid; display: none; }
-    .msg.error { color: var(--danger); border-color: var(--danger); background: rgba(255,85,51,0.05); display: block; }
-    .msg.success { color: var(--success); border-color: var(--success); background: rgba(68,221,136,0.05); display: block; }
-
-    .hidden { display: none !important; }
-
-    .btn-theme {
-      position: fixed; top: 14px; right: 16px; z-index: 200;
-      background: none; border: 1px solid var(--border);
-      color: var(--text-dim); font-size: 14px;
-      padding: 4px 10px; cursor: pointer; transition: all 0.12s; line-height: 1;
-    }
-    .btn-theme:hover { border-color: var(--accent); color: var(--accent); }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenJarvis — Votre IA, chez vous.</title>
+<meta name="description" content="OpenJarvis est un assistant IA physique qui tourne sur votre boîtier. Vos données ne quittent pas votre maison. 29€ de boîtier, abonnement à partir de 7.99€/mois.">
+<meta name="theme-color" content="#050a0e">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#050a0e;--bg-c:#0d1a24;--bg-s:#081018;--bg-h:#112230;
+  --br:#1a3040;--br-h:#2a4a60;
+  --tp:#e0f0f8;--ts:#8aa8bc;--td:#4a6a80;
+  --ac:#00ffe0;--ac2:#00b8ff;--ac-d:rgba(0,255,224,.08);--ac-m:rgba(0,255,224,.25);
+  --ok:#00ff88;--wn:#ffaa00;--er:#ff3860;
+  --fm:'Outfit',system-ui,sans-serif;--fmo:'JetBrains Mono',monospace;
+  --tr:.3s cubic-bezier(.4,0,.2,1);--max:1140px;
+}
+html{scroll-behavior:smooth;scrollbar-width:thin;scrollbar-color:var(--br) var(--bg)}
+body{font-family:var(--fm);background:var(--bg);color:var(--tp);-webkit-font-smoothing:antialiased;overflow-x:hidden;line-height:1.6}
+a{color:var(--ac);text-decoration:none;transition:var(--tr)}
+a:hover{color:#fff}
+body::before{content:'';position:fixed;inset:0;background:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.03'/%3E%3C/svg%3E");pointer-events:none;z-index:0}
+body::after{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 60% 40% at 20% 0%,rgba(0,255,224,.04) 0%,transparent 60%),radial-gradient(ellipse 50% 30% at 80% 100%,rgba(0,184,255,.03) 0%,transparent 50%);pointer-events:none;z-index:0}
+.rv{opacity:0;transform:translateY(32px);transition:opacity .7s ease,transform .7s ease}
+.rv.vis{opacity:1;transform:translateY(0)}
+.rv-d1{transition-delay:.1s}.rv-d2{transition-delay:.2s}.rv-d3{transition-delay:.3s}.rv-d4{transition-delay:.4s}
+nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:0 24px;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);background:rgba(5,10,14,.8);border-bottom:1px solid rgba(26,48,64,.5);transition:var(--tr)}
+.nav-in{max-width:var(--max);margin:0 auto;display:flex;align-items:center;justify-content:space-between;height:64px}
+.nav-brand{display:flex;align-items:center;gap:10px;text-decoration:none}
+.nav-logo{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--ac),var(--ac2));display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:var(--bg);font-family:var(--fmo);letter-spacing:-1px}
+.nav-name{font-size:1.15rem;font-weight:800;letter-spacing:-.5px;color:var(--tp)}
+.nav-name span{background:linear-gradient(135deg,var(--ac),var(--ac2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.nav-links{display:flex;align-items:center;gap:24px}
+.nav-links a{font-size:.82rem;font-weight:500;color:var(--ts);transition:var(--tr)}
+.nav-links a:hover{color:var(--ac)}
+.nav-cta{padding:8px 20px;background:var(--ac);color:var(--bg)!important;font-weight:700;font-size:.8rem;border-radius:8px;border:none;cursor:pointer;transition:var(--tr);letter-spacing:.3px;-webkit-text-fill-color:var(--bg)!important}
+.nav-cta:hover{box-shadow:0 0 24px var(--ac-m);transform:translateY(-1px)}
+.nav-toggle{display:none;background:none;border:1px solid var(--br);border-radius:6px;padding:6px 8px;cursor:pointer;color:var(--ts)}
+.nav-toggle svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2}
+@media(max-width:768px){
+  .nav-links{position:fixed;top:64px;left:0;right:0;background:rgba(5,10,14,.96);backdrop-filter:blur(20px);flex-direction:column;padding:24px;gap:16px;border-bottom:1px solid var(--br);transform:translateY(-120%);transition:var(--tr);opacity:0}
+  .nav-links.open{transform:translateY(0);opacity:1}
+  .nav-toggle{display:block}
+}
+.hero{position:relative;z-index:1;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:120px 24px 80px;overflow:hidden}
+.hero::before{content:'';position:absolute;top:50%;left:50%;width:600px;height:600px;transform:translate(-50%,-50%);background:radial-gradient(circle,rgba(0,255,224,.06) 0%,transparent 70%);pointer-events:none;animation:pulse-glow 6s ease-in-out infinite}
+@keyframes pulse-glow{0%,100%{opacity:.5;transform:translate(-50%,-50%) scale(1)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.15)}}
+.hero-in{max-width:var(--max);margin:0 auto;text-align:center;position:relative}
+.hero-tag{display:inline-flex;align-items:center;gap:8px;padding:6px 16px;border-radius:20px;border:1px solid var(--br);background:var(--ac-d);font-family:var(--fmo);font-size:.7rem;font-weight:600;color:var(--ac);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:28px}
+.hero-tag::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--ac);box-shadow:0 0 8px var(--ac);animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.hero h1{font-size:clamp(2.6rem,6vw,4.5rem);font-weight:900;line-height:1.05;letter-spacing:-2px;margin-bottom:24px}
+.hero h1 em{font-style:normal;background:linear-gradient(135deg,var(--ac),var(--ac2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-sub{font-size:clamp(1rem,2vw,1.2rem);color:var(--ts);max-width:560px;margin:0 auto 40px;line-height:1.7}
+.hero-actions{display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap}
+.btn-p{display:inline-flex;align-items:center;gap:8px;padding:14px 32px;background:var(--ac);color:var(--bg);font-family:var(--fm);font-size:.95rem;font-weight:700;border:none;border-radius:10px;cursor:pointer;transition:var(--tr);letter-spacing:.3px;text-decoration:none}
+.btn-p:hover{box-shadow:0 0 40px var(--ac-m);transform:translateY(-2px);color:var(--bg)}
+.btn-s{display:inline-flex;align-items:center;gap:8px;padding:14px 32px;background:transparent;color:var(--tp);font-family:var(--fm);font-size:.95rem;font-weight:600;border:1px solid var(--br);border-radius:10px;cursor:pointer;transition:var(--tr);text-decoration:none}
+.btn-s:hover{border-color:var(--ac);color:var(--ac);background:var(--ac-d)}
+.hero-price{margin-top:24px;font-family:var(--fmo);font-size:.78rem;color:var(--td)}
+.hero-price strong{color:var(--ac)}
+.hero-device{margin-top:60px;display:flex;justify-content:center}
+.device-frame{width:min(440px,85vw);aspect-ratio:16/10;background:var(--bg-c);border-radius:16px;border:1px solid var(--br);overflow:hidden;position:relative;box-shadow:0 40px 80px -20px rgba(0,0,0,.6),0 0 60px -10px rgba(0,255,224,.08)}
+.device-topbar{height:28px;background:var(--bg-s);border-bottom:1px solid var(--br);display:flex;align-items:center;padding:0 12px;gap:6px}
+.device-dot{width:8px;height:8px;border-radius:50%}
+.device-dot:nth-child(1){background:#ff3860}.device-dot:nth-child(2){background:#ffaa00}.device-dot:nth-child(3){background:#00ff88}
+.device-url{flex:1;text-align:center;font-family:var(--fmo);font-size:.55rem;color:var(--td);letter-spacing:.5px}
+.device-body{padding:16px;height:calc(100% - 28px);display:flex;flex-direction:column;gap:10px}
+.d-row{display:flex;gap:8px;align-items:flex-start;animation:fadeUp .5s ease both}
+.d-av{width:22px;height:22px;border-radius:6px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px}
+.d-av.bot{background:var(--ac-d);border:1px solid var(--ac-m)}.d-av.usr{background:var(--bg-s);border:1px solid var(--br)}
+.d-bub{padding:6px 10px;border-radius:8px;font-family:var(--fmo);font-size:.6rem;line-height:1.5;max-width:75%}
+.d-bub.bot{background:var(--bg-s);border:1px solid var(--br);color:var(--ts)}
+.d-bub.usr{background:var(--ac-d);border:1px solid var(--ac-m);color:var(--ac);margin-left:auto}
+.d-bub .tool{color:var(--ok);font-size:.5rem;display:block;margin-top:3px}
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.d-row:nth-child(2){animation-delay:.3s}.d-row:nth-child(3){animation-delay:.6s}
+.device-glow{position:absolute;bottom:-1px;left:10%;right:10%;height:2px;background:linear-gradient(90deg,transparent,var(--ac),transparent);filter:blur(1px)}
+section{position:relative;z-index:1;padding:100px 24px}
+.s-in{max-width:var(--max);margin:0 auto}
+.s-label{font-family:var(--fmo);font-size:.68rem;font-weight:600;color:var(--ac);letter-spacing:3px;text-transform:uppercase;margin-bottom:12px}
+.s-title{font-size:clamp(1.8rem,4vw,2.8rem);font-weight:800;letter-spacing:-1.5px;line-height:1.1;margin-bottom:16px}
+.s-desc{font-size:1.05rem;color:var(--ts);max-width:560px;line-height:1.7}
+.sep{height:1px;background:linear-gradient(90deg,transparent,var(--br),transparent);margin:0 auto;max-width:var(--max)}
+.moats{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:56px}
+.moat{padding:36px 28px;background:var(--bg-c);border:1px solid var(--br);border-radius:14px;transition:var(--tr);position:relative;overflow:hidden}
+.moat:hover{border-color:var(--ac-m);transform:translateY(-4px);box-shadow:0 20px 40px -15px rgba(0,0,0,.4)}
+.moat::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--ac),var(--ac2));opacity:0;transition:var(--tr)}
+.moat:hover::after{opacity:1}
+.moat-icon{width:48px;height:48px;border-radius:12px;background:var(--ac-d);border:1px solid var(--ac-m);display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:20px;font-family:var(--fmo);color:var(--ac)}
+.moat h3{font-size:1.15rem;font-weight:700;margin-bottom:10px;letter-spacing:-.3px}
+.moat p{font-size:.88rem;color:var(--ts);line-height:1.65}
+@media(max-width:768px){.moats{grid-template-columns:1fr}}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:32px;margin-top:56px;counter-reset:step}
+.step{text-align:center;counter-increment:step}
+.step::before{content:counter(step);display:flex;align-items:center;justify-content:center;width:44px;height:44px;margin:0 auto 18px;border-radius:50%;background:var(--ac-d);border:2px solid var(--ac-m);font-family:var(--fmo);font-size:.9rem;font-weight:700;color:var(--ac)}
+.step h4{font-size:.95rem;font-weight:700;margin-bottom:6px}
+.step p{font-size:.82rem;color:var(--ts);line-height:1.6}
+@media(max-width:768px){.steps{grid-template-columns:1fr 1fr}}
+@media(max-width:480px){.steps{grid-template-columns:1fr}}
+.cmp-wrap{overflow-x:auto;margin-top:48px}
+.cmp-table{width:100%;border-collapse:collapse;font-size:.85rem;min-width:640px}
+.cmp-table th{padding:14px 16px;text-align:left;font-family:var(--fmo);font-size:.65rem;font-weight:600;color:var(--td);letter-spacing:1.5px;text-transform:uppercase;background:var(--bg-s);border-bottom:1px solid var(--br)}
+.cmp-table th:first-child{border-radius:10px 0 0 0}.cmp-table th:last-child{border-radius:0 10px 0 0}
+.cmp-table th.oj{color:var(--ac);background:rgba(0,255,224,.06)}
+.cmp-table td{padding:13px 16px;border-bottom:1px solid rgba(26,48,64,.3);color:var(--ts);vertical-align:middle}
+.cmp-table td:first-child{color:var(--tp);font-weight:600;font-size:.82rem}
+.cmp-table td.oj{background:rgba(0,255,224,.03);color:var(--tp);font-weight:600}
+.cmp-table tr:hover td{background:var(--bg-s)}.cmp-table tr:hover td.oj{background:rgba(0,255,224,.06)}
+.cmp-y{color:var(--ok);font-weight:700}.cmp-n{color:var(--er);opacity:.6}.cmp-m{color:var(--wn)}
+.pricing-tabs{display:flex;gap:4px;margin:40px auto 0;width:fit-content;padding:4px;border-radius:10px;background:var(--bg-c);border:1px solid var(--br)}
+.p-tab{padding:8px 24px;border-radius:8px;font-size:.82rem;font-weight:600;cursor:pointer;transition:var(--tr);color:var(--ts);border:none;background:none;font-family:var(--fm)}
+.p-tab.active{background:var(--ac);color:var(--bg)}
+.p-tab:hover:not(.active){color:var(--tp);background:var(--bg-s)}
+.pricing-grid{display:none;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:32px}
+.pricing-grid.active{display:grid}
+.plan{padding:28px 24px;background:var(--bg-c);border:1px solid var(--br);border-radius:14px;display:flex;flex-direction:column;transition:var(--tr)}
+.plan:hover{border-color:var(--br-h);transform:translateY(-4px);box-shadow:0 20px 40px -10px rgba(0,0,0,.4)}
+.plan.pop{border-color:var(--ac-m);position:relative}
+.plan.pop::before{content:'POPULAIRE';position:absolute;top:-10px;right:16px;padding:3px 12px;border-radius:6px;background:var(--ac);color:var(--bg);font-family:var(--fmo);font-size:.55rem;font-weight:700;letter-spacing:1px}
+.plan-name{font-family:var(--fmo);font-size:.7rem;font-weight:600;color:var(--td);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px}
+.plan-price{font-size:2.2rem;font-weight:800;letter-spacing:-1px;line-height:1}
+.plan-price span{font-size:.85rem;font-weight:400;color:var(--td)}
+.plan-price.free{color:var(--ac)}
+.plan-desc{font-size:.78rem;color:var(--ts);margin:12px 0 20px;line-height:1.5}
+.plan-ft{list-style:none;display:flex;flex-direction:column;gap:8px;margin-bottom:24px;flex:1}
+.plan-ft li{font-size:.8rem;color:var(--ts);display:flex;align-items:flex-start;gap:8px;line-height:1.4}
+.plan-ft li::before{content:'';width:16px;height:16px;flex-shrink:0;border-radius:50%;background:rgba(0,255,136,.1);border:1px solid rgba(0,255,136,.3);margin-top:1px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M5 8l2 2 4-4' stroke='%2300ff88' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:center}
+.plan-btn{display:block;padding:10px;text-align:center;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;transition:var(--tr);border:1px solid var(--br);background:var(--bg-s);color:var(--tp);font-family:var(--fm);text-decoration:none}
+.plan-btn:hover{border-color:var(--ac);color:var(--ac);background:var(--ac-d)}
+.plan.pop .plan-btn{background:var(--ac);color:var(--bg);border-color:var(--ac)}
+.plan.pop .plan-btn:hover{box-shadow:0 0 24px var(--ac-m)}
+.addon-note{text-align:center;margin-top:24px;padding:16px;border-radius:10px;background:var(--bg-c);border:1px solid var(--br);font-size:.82rem;color:var(--ts)}
+.addon-note strong{color:var(--ac)}
+@media(max-width:900px){.pricing-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:520px){.pricing-grid{grid-template-columns:1fr}}
+.hw-grid{display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:48px}
+.hw-card{padding:36px;background:var(--bg-c);border:1px solid var(--br);border-radius:16px;text-align:center;transition:var(--tr)}
+.hw-card:hover{border-color:var(--ac-m);box-shadow:0 20px 40px -10px rgba(0,0,0,.4)}
+.hw-vis{width:120px;height:120px;margin:0 auto 24px;border-radius:16px;background:var(--bg-s);border:1px solid var(--br);display:flex;align-items:center;justify-content:center;font-size:48px}
+.hw-card h3{font-size:1.2rem;font-weight:700;margin-bottom:4px}
+.hw-pr{font-family:var(--fmo);font-size:1.8rem;font-weight:800;color:var(--ac);margin:8px 0}
+.hw-pr span{font-size:.8rem;color:var(--td);font-weight:400}
+.hw-specs{list-style:none;display:flex;flex-direction:column;gap:6px;margin-top:16px;text-align:left}
+.hw-specs li{font-size:.8rem;color:var(--ts);display:flex;align-items:center;gap:8px}
+.hw-specs li::before{content:'';width:4px;height:4px;border-radius:50%;background:var(--ac);flex-shrink:0}
+.hw-credit{margin-top:16px;padding:10px;border-radius:8px;background:rgba(0,255,136,.05);border:1px solid rgba(0,255,136,.15);font-size:.75rem;color:var(--ok)}
+@media(max-width:768px){.hw-grid{grid-template-columns:1fr}}
+.mod-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:48px}
+.mod{padding:24px;background:var(--bg-c);border:1px solid var(--br);border-radius:12px;transition:var(--tr);display:flex;align-items:flex-start;gap:14px}
+.mod:hover{border-color:var(--ac-m)}
+.mod-icon{width:40px;height:40px;border-radius:10px;background:var(--ac-d);border:1px solid var(--ac-m);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.mod h4{font-size:.9rem;font-weight:700;margin-bottom:4px}
+.mod p{font-size:.78rem;color:var(--ts);line-height:1.5}
+.mod-badge{font-family:var(--fmo);font-size:.55rem;padding:2px 6px;border-radius:4px;background:var(--ac-d);color:var(--ac);font-weight:600;letter-spacing:.5px;margin-left:6px}
+@media(max-width:768px){.mod-grid{grid-template-columns:1fr}}
+.modal-overlay{display:none;position:fixed;inset:0;z-index:200;background:rgba(5,10,14,.85);backdrop-filter:blur(12px);align-items:center;justify-content:center;padding:24px}
+.modal-overlay.open{display:flex}
+.modal{width:100%;max-width:420px;background:var(--bg-c);border:1px solid var(--br);border-radius:16px;padding:36px 32px;position:relative;box-shadow:0 40px 80px -20px rgba(0,0,0,.6)}
+.modal-close{position:absolute;top:16px;right:16px;background:none;border:none;color:var(--td);font-size:18px;cursor:pointer;transition:var(--tr);width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:6px}
+.modal-close:hover{color:var(--ac);background:var(--ac-d)}
+.modal h2{font-size:1.3rem;font-weight:800;margin-bottom:4px;letter-spacing:-.5px}
+.modal .auth-sub{font-size:.82rem;color:var(--td);margin-bottom:24px}
+.auth-tabs{display:flex;gap:4px;padding:4px;border-radius:8px;background:var(--bg-s);margin-bottom:24px}
+.auth-tab{flex:1;padding:8px;border:none;background:none;font-family:var(--fm);font-size:.8rem;font-weight:600;color:var(--td);cursor:pointer;border-radius:6px;transition:var(--tr)}
+.auth-tab.active{background:var(--bg-c);color:var(--ac)}
+.auth-form{display:flex;flex-direction:column;gap:14px}
+.auth-form.hidden{display:none}
+.field label{display:block;font-family:var(--fmo);font-size:.65rem;font-weight:600;color:var(--td);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:5px}
+.field input,.field select{width:100%;padding:10px 13px;background:var(--bg-s);border:1px solid var(--br);border-radius:8px;color:var(--tp);font-family:var(--fm);font-size:.88rem;outline:none;transition:var(--tr)}
+.field input::placeholder{color:var(--td)}
+.field input:focus,.field select:focus{border-color:var(--ac);box-shadow:0 0 0 2px var(--ac-d)}
+.field select{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%234a6a80' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
+.field select option{background:var(--bg-c)}
+.auth-btn{width:100%;padding:12px;background:var(--ac);color:var(--bg);font-family:var(--fm);font-size:.88rem;font-weight:700;border:none;border-radius:8px;cursor:pointer;transition:var(--tr);letter-spacing:.3px;margin-top:4px}
+.auth-btn:hover{box-shadow:0 0 24px var(--ac-m)}
+.auth-btn:disabled{opacity:.4;cursor:not-allowed}
+.auth-msg{font-size:.8rem;padding:8px 12px;border-radius:6px;display:none}
+.auth-msg.error{display:block;color:var(--er);background:rgba(255,56,96,.08);border:1px solid rgba(255,56,96,.2)}
+.auth-msg.success{display:block;color:var(--ok);background:rgba(0,255,136,.08);border:1px solid rgba(0,255,136,.2)}
+.faq-list{max-width:700px;margin:48px auto 0;display:flex;flex-direction:column;gap:8px}
+.faq{border:1px solid var(--br);border-radius:10px;overflow:hidden;background:var(--bg-c)}
+.faq:hover{border-color:var(--br-h)}
+.faq-q{padding:16px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;font-size:.9rem;font-weight:600;user-select:none;transition:color var(--tr)}
+.faq-q::after{content:'+';font-family:var(--fmo);font-size:1.1rem;color:var(--td);transition:var(--tr)}
+.faq.open .faq-q{color:var(--ac)}.faq.open .faq-q::after{content:'\2212';color:var(--ac)}
+.faq-a{max-height:0;overflow:hidden;transition:max-height .4s ease}
+.faq.open .faq-a{max-height:300px}
+.faq-a p{padding:0 20px 16px;font-size:.85rem;color:var(--ts);line-height:1.65}
+.cta-ban{text-align:center;padding:80px 24px;position:relative;overflow:hidden;z-index:1}
+.cta-ban h2{font-size:clamp(1.6rem,4vw,2.5rem);font-weight:800;letter-spacing:-1px;margin-bottom:16px}
+.cta-ban p{font-size:1rem;color:var(--ts);max-width:480px;margin:0 auto 32px}
+footer{padding:40px 24px;border-top:1px solid var(--br);position:relative;z-index:1}
+.footer-in{max-width:var(--max);margin:0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px}
+.footer-brand{font-size:.8rem;color:var(--td)}.footer-brand strong{color:var(--ts);font-weight:600}
+.footer-links{display:flex;gap:20px}
+.footer-links a{font-size:.78rem;color:var(--td);transition:var(--tr)}
+.footer-links a:hover{color:var(--ac)}
+.footer-legal{font-family:var(--fmo);font-size:.62rem;color:var(--td);letter-spacing:.5px}
+</style>
 </head>
 <body>
-<button class="btn-theme" id="btn-theme" onclick="toggleTheme()" title="Changer le thème">☀</button>
-<div class="container">
-
-  <!-- Brand -->
-  <div class="brand-panel">
-    <div>
-      <div class="logo">◈ CLAWBOT</div>
-      <div class="logo-sub">Cloud Infrastructure — Yumi Lab</div>
+<nav>
+  <div class="nav-in">
+    <a href="#" class="nav-brand">
+      <div class="nav-logo">OJ</div>
+      <div class="nav-name"><span>Open</span>Jarvis</div>
+    </a>
+    <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+      <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <div class="nav-links">
+      <a href="#why">Pourquoi</a>
+      <a href="#compare">Comparatif</a>
+      <a href="#pricing">Tarifs</a>
+      <a href="#hardware">Hardware</a>
+      <a href="#faq">FAQ</a>
+      <a href="javascript:void(0)" onclick="openAuth('login')" class="nav-cta">Se connecter</a>
     </div>
-    <div class="brand-mid">
-      <div class="brand-title">
-        L'IA embarquée<br>pour votre <strong>Yumi</strong><br>hardware.
-      </div>
-      <ul class="feature-list">
-        <li>Smart Pi One &amp; SmartPad compatible</li>
-        <li>Anthropic Claude — modèles dernière génération</li>
-        <li>Provisionnement automatique des appareils</li>
-        <li>Quota de tokens géré côté cloud</li>
-      </ul>
+  </div>
+</nav>
+<section class="hero">
+  <div class="hero-in">
+    <div class="hero-tag rv">by Yumi Lab</div>
+    <h1 class="rv rv-d1">Votre IA, <em>chez vous</em>.<br>Pas chez un g&eacute;ant chinois.</h1>
+    <p class="hero-sub rv rv-d2">OpenJarvis est un assistant IA physique qui ex&eacute;cute du vrai code sur votre bo&icirc;tier. Vos donn&eacute;es ne quittent jamais votre maison.</p>
+    <div class="hero-actions rv rv-d3">
+      <a href="javascript:void(0)" onclick="openAuth('register')" class="btn-p">Commander &mdash; 29&euro;</a>
+      <a href="#why" class="btn-s">D&eacute;couvrir</a>
     </div>
-    <div class="plan-grid">
-      <div class="plan-chip">
-        <div class="pname">Particulier</div>
-        <div class="pprice">7,99 €</div>
-        <div class="ptokens">200 000 tokens / jour</div>
-      </div>
-      <div class="plan-chip">
-        <div class="pname">Pro</div>
-        <div class="pprice">24,99 €</div>
-        <div class="ptokens">2 000 000 tokens / jour</div>
+    <p class="hero-price rv rv-d4">Bo&icirc;tier <strong>29&euro;</strong> &middot; Abonnement &agrave; partir de <strong>7,99&euro;/mois</strong> &middot; 1 mois offert</p>
+    <div class="hero-device rv rv-d4">
+      <div class="device-frame">
+        <div class="device-topbar">
+          <div class="device-dot"></div><div class="device-dot"></div><div class="device-dot"></div>
+          <div class="device-url">jarvis.local</div>
+        </div>
+        <div class="device-body">
+          <div class="d-row"><div class="d-av usr">&#x1F464;</div><div class="d-bub usr">Organise mes photos du week-end par date</div></div>
+          <div class="d-row"><div class="d-av bot">&#x2726;</div><div class="d-bub bot">J'analyse ~/Photos...<span class="tool">&#x25CF; bash ls ~/Photos | wc -l &rarr; 247 fichiers</span></div></div>
+          <div class="d-row"><div class="d-av bot">&#x2726;</div><div class="d-bub bot">Tri termin&eacute;. 247 photos class&eacute;es en 12 dossiers.<span class="tool">&#x25CF; write_file rapport.md &#x2713;</span></div></div>
+        </div>
+        <div class="device-glow"></div>
       </div>
     </div>
   </div>
-
-  <!-- Auth -->
-  <div class="auth-panel">
-    <div class="auth-header">
-      <div class="auth-title">ACCÈS AU PORTAIL</div>
-      <div class="auth-sub">Gérez votre abonnement et vos appareils</div>
+</section>
+<section id="why">
+  <div class="s-in">
+    <div class="s-label rv">Pourquoi OpenJarvis</div>
+    <h2 class="s-title rv rv-d1">Trois choses que les autres<br>ne peuvent pas faire.</h2>
+    <div class="moats">
+      <div class="moat rv rv-d1"><div class="moat-icon">&gt;_</div><h3>Ex&eacute;cution r&eacute;elle</h3><p>OpenJarvis ex&eacute;cute du vrai code sur votre machine. Bash, Python, fichiers, r&eacute;seau local. Pas un chatbot &mdash; un vrai assistant syst&egrave;me.</p></div>
+      <div class="moat rv rv-d2"><div class="moat-icon">&#x1F512;</div><h3>Donn&eacute;es locales, RGPD natif</h3><p>Vos fichiers et conversations restent sur le bo&icirc;tier, chez vous. Aucune donn&eacute;e personnelle ne transite par nos serveurs.</p></div>
+      <div class="moat rv rv-d3"><div class="moat-icon">&#x26A1;</div><h3>Fonctionne hors connexion</h3><p>Pas de WiFi ? OpenJarvis continue de tourner. Fichiers, scripts, outils locaux &mdash; tout fonctionne sans internet.</p></div>
     </div>
-
-    <div class="tabs">
-      <button class="tab active" onclick="showTab('login')">Connexion</button>
-      <button class="tab" onclick="showTab('register')">Créer un compte</button>
+  </div>
+</section>
+<div class="sep"></div>
+<section id="how">
+  <div class="s-in">
+    <div class="s-label rv">Comment &ccedil;a marche</div>
+    <h2 class="s-title rv rv-d1">Pr&ecirc;t en 3 minutes.</h2>
+    <div class="steps">
+      <div class="step rv rv-d1"><h4>Branchez le bo&icirc;tier</h4><p>Connectez OpenJarvis &agrave; votre box. Alimentation USB-C.</p></div>
+      <div class="step rv rv-d2"><h4>Scannez le QR code</h4><p>Cr&eacute;ez votre compte sur openjarvis.io en 30 secondes.</p></div>
+      <div class="step rv rv-d3"><h4>Parlez &agrave; Jarvis</h4><p>Acc&eacute;dez au dashboard depuis n'importe quel navigateur.</p></div>
+      <div class="step rv rv-d4"><h4>Ajoutez des modules</h4><p>Telegram, voix, cam&eacute;ra, domotique &mdash; ce que vous voulez.</p></div>
     </div>
-
-    <!-- Login -->
-    <form id="login-form" onsubmit="doLogin(event)">
-      <div class="field">
-        <label>Email</label>
-        <input type="email" id="login-email" placeholder="vous@domaine.com" required>
-      </div>
-      <div class="field">
-        <label>Mot de passe</label>
-        <input type="password" id="login-pwd" placeholder="••••••••" required>
-      </div>
-      <div class="msg" id="login-msg"></div>
-      <button class="btn" type="submit">Se connecter →</button>
+  </div>
+</section>
+<div class="sep"></div>
+<section id="compare">
+  <div class="s-in">
+    <div class="s-label rv">Comparatif</div>
+    <h2 class="s-title rv rv-d1">OpenJarvis vs. le reste du march&eacute;.</h2>
+    <div class="cmp-wrap rv rv-d3">
+      <table class="cmp-table">
+        <thead><tr><th></th><th class="oj">OpenJarvis</th><th>Kimi Claw</th><th>OpenClaw</th><th>Apple Intelligence</th></tr></thead>
+        <tbody>
+          <tr><td>Ex&eacute;cution de code</td><td class="oj"><span class="cmp-y">&#x2713; Bash, Python, fichiers</span></td><td><span class="cmp-m">Sandbox cloud</span></td><td><span class="cmp-y">&#x2713; Local</span></td><td><span class="cmp-n">&#x2717;</span></td></tr>
+          <tr><td>Donn&eacute;es locales</td><td class="oj"><span class="cmp-y">&#x2713; 100% local</span></td><td><span class="cmp-n">&#x2717; Serveurs chinois</span></td><td><span class="cmp-y">&#x2713; Local</span></td><td><span class="cmp-m">Partiel</span></td></tr>
+          <tr><td>Hors ligne</td><td class="oj"><span class="cmp-y">&#x2713; Oui</span></td><td><span class="cmp-n">&#x2717; Non</span></td><td><span class="cmp-m">Partiel</span></td><td><span class="cmp-m">Partiel</span></td></tr>
+          <tr><td>RGPD natif</td><td class="oj"><span class="cmp-y">&#x2713; By design</span></td><td><span class="cmp-n">&#x2717; Loi PIPL</span></td><td><span class="cmp-m">D&eacute;pend du setup</span></td><td><span class="cmp-m">Partiel</span></td></tr>
+          <tr><td>Plug &amp; play</td><td class="oj"><span class="cmp-y">&#x2713; 3 minutes</span></td><td><span class="cmp-y">&#x2713; Cloud</span></td><td><span class="cmp-n">&#x2717; Setup technique</span></td><td><span class="cmp-y">&#x2713; Int&eacute;gr&eacute;</span></td></tr>
+          <tr><td>Modules extensibles</td><td class="oj"><span class="cmp-y">&#x2713; Store ouvert</span></td><td><span class="cmp-y">&#x2713; 5000 skills</span></td><td><span class="cmp-m">Communaut&eacute;</span></td><td><span class="cmp-n">&#x2717; Ferm&eacute;</span></td></tr>
+          <tr><td>Prix d'entr&eacute;e</td><td class="oj"><strong>29&euro; + 0&euro;/mois</strong></td><td>Gratuit (cloud)</td><td>Gratuit (DIY)</td><td>Inclus iPhone</td></tr>
+          <tr><td>Souverainet&eacute;</td><td class="oj"><span class="cmp-y">&#x2713; Fran&ccedil;ais</span></td><td><span class="cmp-n">&#x2717; P&eacute;kin</span></td><td><span class="cmp-m">Communautaire</span></td><td><span class="cmp-n">&#x2717; Cupertino</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+<div class="sep"></div>
+<section id="pricing">
+  <div class="s-in" style="text-align:center">
+    <div class="s-label rv">Tarifs</div>
+    <h2 class="s-title rv rv-d1" style="margin-left:auto;margin-right:auto">Un prix, pas un pi&egrave;ge.</h2>
+    <p class="s-desc rv rv-d2" style="margin-left:auto;margin-right:auto">Illimit&eacute; sur tous les plans. Au-del&agrave; du quota, on ralentit &mdash; on ne coupe jamais.</p>
+    <div class="pricing-tabs rv rv-d3">
+      <button class="p-tab active" onclick="switchTab('perso',this)">Perso</button>
+      <button class="p-tab" onclick="switchTab('pro',this)">Pro</button>
+    </div>
+    <div class="pricing-grid active" data-tab="perso">
+      <div class="plan rv rv-d1"><div class="plan-name">Free</div><div class="plan-price free">0&euro;<span>/mois</span></div><div class="plan-desc">Pour d&eacute;couvrir.</div><ul class="plan-ft"><li>1 assistant</li><li>Mod&egrave;le Haiku</li><li>Chat + fichiers</li><li>Vitesse r&eacute;duite</li></ul><a href="javascript:void(0)" onclick="openAuth('register')" class="plan-btn">Commencer</a></div>
+      <div class="plan rv rv-d2"><div class="plan-name">Starter</div><div class="plan-price">7,99&euro;<span>/mois</span></div><div class="plan-desc">Usage quotidien.</div><ul class="plan-ft"><li>3 assistants</li><li>Haiku + Sonnet</li><li>Chat + fichiers</li><li>Vitesse normale</li></ul><a href="javascript:void(0)" onclick="openAuth('register')" class="plan-btn">Choisir Starter</a></div>
+      <div class="plan pop rv rv-d3"><div class="plan-name">Plus</div><div class="plan-price">29,99&euro;<span>/mois</span></div><div class="plan-desc">Pour toute la famille.</div><ul class="plan-ft"><li>10 assistants</li><li>Haiku + Sonnet</li><li>Chat + fichiers + web</li><li>Vitesse rapide</li><li>Mode Safe enfants</li></ul><a href="javascript:void(0)" onclick="openAuth('register')" class="plan-btn">Choisir Plus</a></div>
+      <div class="plan rv rv-d4"><div class="plan-name">Geek</div><div class="plan-price">80&euro;<span>/mois</span></div><div class="plan-desc">Tout, sans limite.</div><ul class="plan-ft"><li>15 assistants</li><li>Tous les mod&egrave;les</li><li>Tous les outils</li><li>Mode Geek avanc&eacute;</li></ul><a href="javascript:void(0)" onclick="openAuth('register')" class="plan-btn">Choisir Geek</a></div>
+    </div>
+    <div class="pricing-grid" data-tab="pro">
+      <div class="plan rv rv-d1"><div class="plan-name">Pro Starter</div><div class="plan-price">39&euro;<span>/mois</span></div><div class="plan-desc">Ind&eacute;pendants et TPE.</div><ul class="plan-ft"><li>5 assistants</li><li>Tous les mod&egrave;les</li><li>SSH, API, MCP</li><li>Credential vault</li></ul><a href="javascript:void(0)" onclick="openAuth('register')" class="plan-btn">Choisir</a></div>
+      <div class="plan pop rv rv-d2"><div class="plan-name">Pro</div><div class="plan-price">189&euro;<span>/mois</span></div><div class="plan-desc">PME exigeantes.</div><ul class="plan-ft"><li>15 assistants</li><li>Tous les mod&egrave;les</li><li>Tous les outils pro</li><li>Support prioritaire</li><li>Options RGPD</li></ul><a href="javascript:void(0)" onclick="openAuth('register')" class="plan-btn">Choisir Pro</a></div>
+      <div class="plan rv rv-d3"><div class="plan-name">Pro+</div><div class="plan-price">300&euro;<span>/mois</span></div><div class="plan-desc">Multi-utilisateurs.</div><ul class="plan-ft"><li>30 assistants</li><li>Tous les outils pro</li><li>Multi-utilisateurs</li><li>Support +</li></ul><a href="javascript:void(0)" onclick="openAuth('register')" class="plan-btn">Choisir Pro+</a></div>
+      <div class="plan rv rv-d4"><div class="plan-name">Business</div><div class="plan-price">500&euro;+<span>/mois</span></div><div class="plan-desc">Organisations.</div><ul class="plan-ft"><li>Assistants illimit&eacute;s</li><li>Gestion d'&eacute;quipe</li><li>SLA garanti</li><li>Support d&eacute;di&eacute;</li></ul><a href="mailto:contact@yumi-lab.com" class="plan-btn">Nous contacter</a></div>
+    </div>
+    <div class="addon-note rv">Besoin de plus d'assistants ? <strong>+2,90&euro;/mois</strong> par assistant suppl&eacute;mentaire.</div>
+  </div>
+</section>
+<div class="sep"></div>
+<section id="hardware">
+  <div class="s-in">
+    <div class="s-label rv">Hardware</div>
+    <h2 class="s-title rv rv-d1">Deux bo&icirc;tiers. Un cerveau.</h2>
+    <div class="hw-grid">
+      <div class="hw-card rv rv-d2"><div class="hw-vis">&#x1F4E6;</div><h3>OpenJarvis Home</h3><div class="hw-pr">29&euro; <span>TTC</span></div><ul class="hw-specs"><li>Smart Pi One &mdash; Allwinner H3</li><li>1 Go RAM, WiFi + Ethernet</li><li>Bo&icirc;tier acrylique compact</li><li>Alimentation USB-C incluse</li></ul><div class="hw-credit">&#x1F381; 30&euro; de cr&eacute;dit inclus = 1er mois offert</div></div>
+      <div class="hw-card rv rv-d3"><div class="hw-vis">&#x1F4F1;</div><h3>OpenJarvis Pro</h3><div class="hw-pr">200&euro; <span>TTC</span></div><ul class="hw-specs"><li>SmartPad &mdash; &Eacute;cran tactile capacitif</li><li>1 Go RAM, WiFi + Ethernet</li><li>Dock int&eacute;gr&eacute; + 2x USB</li><li>Alimentation USB-C incluse</li></ul><div class="hw-credit">&#x1F381; 30&euro; de cr&eacute;dit inclus</div></div>
+    </div>
+  </div>
+</section>
+<div class="sep"></div>
+<section id="modules">
+  <div class="s-in">
+    <div class="s-label rv">Modules</div>
+    <h2 class="s-title rv rv-d1">&Eacute;tendez Jarvis &agrave; l'infini.</h2>
+    <div class="mod-grid">
+      <div class="mod rv rv-d1"><div class="mod-icon">&#x2709;</div><div><h4>Telegram <span class="mod-badge">DISPO</span></h4><p>Parlez &agrave; Jarvis depuis Telegram. Commandes, fichiers, notifications.</p></div></div>
+      <div class="mod rv rv-d2"><div class="mod-icon">&#x1F3A4;</div><div><h4>Voix <span class="mod-badge">BIENT&Ocirc;T</span></h4><p>Commande vocale. &laquo; Jarvis, envoie le rapport. &raquo;</p></div></div>
+      <div class="mod rv rv-d3"><div class="mod-icon">&#x1F4F7;</div><div><h4>Cam&eacute;ra <span class="mod-badge">BIENT&Ocirc;T</span></h4><p>Surveillance, reconnaissance, analyse d'image.</p></div></div>
+      <div class="mod rv rv-d1"><div class="mod-icon">&#x1F3E0;</div><div><h4>Domotique <span class="mod-badge">BIENT&Ocirc;T</span></h4><p>Contr&ocirc;lez vos appareils via MQTT et Home Assistant.</p></div></div>
+      <div class="mod rv rv-d2"><div class="mod-icon">&#x1F4BB;</div><div><h4>SSH <span class="mod-badge">PRO</span></h4><p>Acc&egrave;s SSH &agrave; vos serveurs distants depuis Jarvis.</p></div></div>
+      <div class="mod rv rv-d3"><div class="mod-icon">&#x1F517;</div><div><h4>API &amp; MCP <span class="mod-badge">PRO</span></h4><p>Connectez vos outils m&eacute;tier. Jarvis = hub de votre stack.</p></div></div>
+    </div>
+  </div>
+</section>
+<div class="sep"></div>
+<section id="faq">
+  <div class="s-in" style="text-align:center">
+    <div class="s-label rv">FAQ</div>
+    <h2 class="s-title rv rv-d1">Questions fr&eacute;quentes</h2>
+    <div class="faq-list">
+      <div class="faq rv rv-d1"><div class="faq-q" onclick="this.parentElement.classList.toggle('open')">Mes donn&eacute;es sont-elles vraiment locales ?</div><div class="faq-a"><p>Oui. OpenJarvis tourne enti&egrave;rement sur le bo&icirc;tier branch&eacute; chez vous. Vos fichiers et conversations ne quittent jamais votre r&eacute;seau local. Le cloud ne sert qu'au routage des mod&egrave;les IA et &agrave; la gestion de votre compte.</p></div></div>
+      <div class="faq rv rv-d2"><div class="faq-q" onclick="this.parentElement.classList.toggle('open')">Que se passe-t-il si j'atteins mon quota ?</div><div class="faq-a"><p>On ne coupe jamais. Comme un forfait mobile, au-del&agrave; du quota la vitesse diminue mais le service continue. Vous pouvez upgrader &agrave; tout moment avec d&eacute;duction au prorata.</p></div></div>
+      <div class="faq rv rv-d3"><div class="faq-q" onclick="this.parentElement.classList.toggle('open')">Est-ce que &ccedil;a marche sans internet ?</div><div class="faq-a"><p>Les fonctionnalit&eacute;s locales (fichiers, scripts, outils) fonctionnent hors ligne. Les requ&ecirc;tes IA n&eacute;cessitent une connexion car les mod&egrave;les tournent chez Anthropic.</p></div></div>
+      <div class="faq rv rv-d3"><div class="faq-q" onclick="this.parentElement.classList.toggle('open')">Puis-je avoir plusieurs bo&icirc;tiers ?</div><div class="faq-a"><p>Oui. Un abonnement, autant de bo&icirc;tiers que vous voulez. Les enfants utilisent le bo&icirc;tier parent en mode Safe.</p></div></div>
+      <div class="faq rv rv-d4"><div class="faq-q" onclick="this.parentElement.classList.toggle('open')">Quelle diff&eacute;rence avec Alexa ou Siri ?</div><div class="faq-a"><p>Alexa et Siri r&eacute;pondent &agrave; des questions. OpenJarvis <strong>agit</strong> : il ex&eacute;cute du code, manipule vos fichiers, pilote vos outils. C'est un assistant syst&egrave;me, pas un chatbot vocal.</p></div></div>
+      <div class="faq rv rv-d4"><div class="faq-q" onclick="this.parentElement.classList.toggle('open')">Qui fabrique OpenJarvis ?</div><div class="faq-a"><p>OpenJarvis est con&ccedil;u par <strong>Yumi Lab</strong>, sp&eacute;cialiste en &eacute;lectronique embarqu&eacute;e et impression 3D. Le hardware utilise le Smart Pi One, notre propre carte.</p></div></div>
+    </div>
+  </div>
+</section>
+<section class="cta-ban" id="order">
+  <h2 class="rv">Pr&ecirc;t &agrave; reprendre le contr&ocirc;le ?</h2>
+  <p class="rv rv-d1">29&euro; de bo&icirc;tier. 1 mois offert. Satisfait ou rembours&eacute; 30 jours.</p>
+  <div class="rv rv-d2" style="display:flex;justify-content:center;gap:16px;flex-wrap:wrap">
+    <a href="javascript:void(0)" onclick="openAuth('register')" class="btn-p">Commander &mdash; 29&euro;</a>
+    <a href="mailto:contact@yumi-lab.com" class="btn-s">Nous contacter</a>
+  </div>
+</section>
+<footer>
+  <div class="footer-in">
+    <div class="footer-brand"><strong>OpenJarvis</strong> &mdash; A Yumi Lab product</div>
+    <div class="footer-links"><a href="#">CGV</a><a href="#">Confidentialit&eacute;</a><a href="mailto:contact@yumi-lab.com">Contact</a><a href="https://github.com/Yumi-Lab" target="_blank" rel="noopener">GitHub</a></div>
+    <div class="footer-legal">&copy; 2026 Yumi Lab</div>
+  </div>
+</footer>
+<div class="modal-overlay" id="authModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeAuth()">&#x2715;</button>
+    <h2>Bienvenue</h2>
+    <div class="auth-sub">G&eacute;rez votre abonnement et vos appareils</div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="showAuthTab('login')">Connexion</button>
+      <button class="auth-tab" onclick="showAuthTab('register')">Cr&eacute;er un compte</button>
+    </div>
+    <form class="auth-form" id="loginForm" onsubmit="doLogin(event)">
+      <div class="field"><label>Email</label><input type="email" id="login-email" placeholder="vous@email.com" required></div>
+      <div class="field"><label>Mot de passe</label><input type="password" id="login-pwd" placeholder="••••••••" required></div>
+      <div class="auth-msg" id="login-msg"></div>
+      <button type="submit" class="auth-btn">Se connecter &rarr;</button>
     </form>
-
-    <!-- Register -->
-    <form id="register-form" class="hidden" onsubmit="doRegister(event)">
-      <div class="field">
-        <label>Email</label>
-        <input type="email" id="reg-email" placeholder="vous@domaine.com" required>
-      </div>
-      <div class="field">
-        <label>Mot de passe</label>
-        <input type="password" id="reg-pwd" placeholder="8 caractères minimum" minlength="8" required>
-      </div>
-      <div class="field">
-        <label>Plan</label>
+    <form class="auth-form hidden" id="registerForm" onsubmit="doRegister(event)">
+      <div class="field"><label>Email</label><input type="email" id="reg-email" placeholder="vous@email.com" required></div>
+      <div class="field"><label>Mot de passe</label><input type="password" id="reg-pwd" placeholder="8 caract&egrave;res minimum" minlength="8" required></div>
+      <div class="field"><label>Plan</label>
         <select id="reg-plan">
-          <option value="particulier">Particulier — 7,99 €/mois — 200k tokens/jour</option>
-          <option value="pro">Pro — 24,99 €/mois — 2M tokens/jour</option>
+          <option value="free">Free &mdash; 0&euro;/mois</option>
+          <option value="particulier" selected>Starter &mdash; 7,99&euro;/mois</option>
+          <option value="pro">Pro Starter &mdash; 39&euro;/mois</option>
         </select>
       </div>
-      <div class="msg" id="reg-msg"></div>
-      <button class="btn" type="submit">Créer mon compte →</button>
+      <div class="auth-msg" id="reg-msg"></div>
+      <button type="submit" class="auth-btn">Cr&eacute;er mon compte &rarr;</button>
     </form>
   </div>
-
 </div>
-
 <script>
-  function applyTheme(t) {
-    document.documentElement.setAttribute('data-theme', t);
-    document.getElementById('btn-theme').textContent = t === 'light' ? '☾' : '☀';
-  }
-  function toggleTheme() {
-    const next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
-    localStorage.setItem('clawbot_theme', next);
-    applyTheme(next);
-  }
-  applyTheme(localStorage.getItem('clawbot_theme') || 'dark');
-
-  if (localStorage.getItem('clawbot_token')) window.location.href = '/dashboard';
-
-  function showTab(tab) {
-    document.querySelectorAll('.tab').forEach((t, i) => {
-      t.classList.toggle('active', (i === 0) === (tab === 'login'));
-    });
-    document.getElementById('login-form').classList.toggle('hidden', tab !== 'login');
-    document.getElementById('register-form').classList.toggle('hidden', tab !== 'register');
-  }
-
-  function showMsg(id, text, type) {
-    const el = document.getElementById(id);
-    el.className = 'msg ' + type;
-    el.textContent = text;
-  }
-
-  async function doLogin(e) {
-    e.preventDefault();
-    const btn = e.target.querySelector('button[type=submit]');
-    btn.disabled = true; btn.textContent = 'Connexion...';
-    try {
-      const r = await fetch('/v1/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: document.getElementById('login-email').value,
-          password: document.getElementById('login-pwd').value,
-        }),
-      });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.detail || 'Erreur de connexion');
-      localStorage.setItem('clawbot_token', data.access_token);
-      localStorage.setItem('clawbot_plan', data.plan);
-      localStorage.setItem('clawbot_subkey', data.sub_key);
-      localStorage.setItem('clawbot_email', document.getElementById('login-email').value);
-      window.location.href = '/dashboard';
-    } catch (err) {
-      showMsg('login-msg', err.message, 'error');
-      btn.disabled = false; btn.textContent = 'Se connecter →';
-    }
-  }
-
-  async function doRegister(e) {
-    e.preventDefault();
-    const btn = e.target.querySelector('button[type=submit]');
-    btn.disabled = true; btn.textContent = 'Création...';
-    try {
-      const r = await fetch('/v1/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: document.getElementById('reg-email').value,
-          password: document.getElementById('reg-pwd').value,
-          plan: document.getElementById('reg-plan').value,
-        }),
-      });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.detail || 'Erreur de création');
-      localStorage.setItem('clawbot_token', data.access_token);
-      localStorage.setItem('clawbot_plan', data.plan);
-      localStorage.setItem('clawbot_subkey', data.sub_key);
-      localStorage.setItem('clawbot_email', document.getElementById('reg-email').value);
-      window.location.href = '/dashboard';
-    } catch (err) {
-      showMsg('reg-msg', err.message, 'error');
-      btn.disabled = false; btn.textContent = 'Créer mon compte →';
-    }
-  }
+if(sessionStorage.getItem('clawbot_token'))window.location.href='/dashboard';
+var obs=new IntersectionObserver(function(e){e.forEach(function(x){if(x.isIntersecting){x.target.classList.add('vis');obs.unobserve(x.target)}})},{threshold:.12,rootMargin:'0px 0px -40px 0px'});
+document.querySelectorAll('.rv').forEach(function(el){obs.observe(el)});
+function switchTab(tab,btn){document.querySelectorAll('.p-tab').forEach(function(t){t.classList.remove('active')});document.querySelectorAll('.pricing-grid[data-tab]').forEach(function(g){g.classList.remove('active')});btn.classList.add('active');document.querySelector('[data-tab="'+tab+'"]').classList.add('active')}
+document.querySelectorAll('.nav-links a').forEach(function(a){a.addEventListener('click',function(){document.querySelector('.nav-links').classList.remove('open')})});
+function openAuth(tab){document.getElementById('authModal').classList.add('open');document.body.style.overflow='hidden';if(tab)showAuthTab(tab)}
+function closeAuth(){document.getElementById('authModal').classList.remove('open');document.body.style.overflow=''}
+document.getElementById('authModal').addEventListener('click',function(e){if(e.target===this)closeAuth()});
+function showAuthTab(tab){document.querySelectorAll('.auth-tab').forEach(function(t,i){t.classList.toggle('active',(i===0)===(tab==='login'))});document.getElementById('loginForm').classList.toggle('hidden',tab!=='login');document.getElementById('registerForm').classList.toggle('hidden',tab!=='register')}
+function showMsg(id,text,type){var el=document.getElementById(id);el.className='auth-msg '+type;el.textContent=text}
+async function doLogin(e){e.preventDefault();var btn=e.target.querySelector('button[type=submit]');btn.disabled=true;btn.textContent='Connexion...';try{var r=await fetch('/v1/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:document.getElementById('login-email').value,password:document.getElementById('login-pwd').value})});var d=await r.json();if(!r.ok)throw new Error(d.detail||'Erreur de connexion');sessionStorage.setItem('clawbot_token',d.access_token);sessionStorage.setItem('clawbot_plan',d.plan);sessionStorage.setItem('clawbot_subkey',d.sub_key);sessionStorage.setItem('clawbot_email',document.getElementById('login-email').value);window.location.href='/dashboard'}catch(err){showMsg('login-msg',err.message,'error');btn.disabled=false;btn.textContent='Se connecter \u2192'}}
+async function doRegister(e){e.preventDefault();var btn=e.target.querySelector('button[type=submit]');btn.disabled=true;btn.textContent='Cr\u00e9ation...';try{var r=await fetch('/v1/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:document.getElementById('reg-email').value,password:document.getElementById('reg-pwd').value,plan:document.getElementById('reg-plan').value})});var d=await r.json();if(!r.ok)throw new Error(d.detail||'Erreur de cr\u00e9ation');sessionStorage.setItem('clawbot_token',d.access_token);sessionStorage.setItem('clawbot_plan',d.plan);sessionStorage.setItem('clawbot_subkey',d.sub_key);sessionStorage.setItem('clawbot_email',document.getElementById('reg-email').value);window.location.href='/dashboard'}catch(err){showMsg('reg-msg',err.message,'error');btn.disabled=false;btn.textContent='Cr\u00e9er mon compte \u2192'}}
 </script>
 </body>
 </html>
