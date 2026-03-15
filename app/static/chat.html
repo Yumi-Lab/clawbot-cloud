@@ -60,6 +60,26 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .sb-key-val{font-family:var(--fmo);font-size:.65rem;color:var(--ts);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sb-key-val.ok{color:var(--ok)}
 .sb-key-val.none{color:var(--er)}
+/* devices link in sidebar */
+.sb-devices{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:7px;cursor:pointer;transition:var(--tr);margin-top:6px}
+.sb-devices:hover{background:var(--bg-h)}
+.sb-devices-icon{font-size:.78rem;flex-shrink:0;opacity:.7}
+.sb-devices-lbl{font-family:var(--fmo);font-size:.58rem;color:var(--td);text-transform:uppercase;letter-spacing:1.5px}
+/* devices modal */
+.dev-list{display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto;margin-top:4px;scrollbar-width:thin;scrollbar-color:var(--br) transparent}
+.dev-card{padding:12px 14px;border:1px solid var(--br);border-radius:8px;background:var(--bg-i);display:flex;flex-direction:column;gap:6px;transition:var(--tr)}
+.dev-card:hover{border-color:var(--br-l)}
+.dev-card-head{display:flex;align-items:center;justify-content:space-between}
+.dev-card-name{font-family:var(--fmo);font-size:.72rem;font-weight:600;color:var(--tp)}
+.dev-badge{font-family:var(--fmo);font-size:.55rem;padding:2px 7px;border-radius:10px;letter-spacing:.1em;text-transform:uppercase}
+.dev-badge.ok{background:rgba(0,255,136,.1);border:1px solid rgba(0,255,136,.3);color:var(--ok)}
+.dev-badge.pending{background:rgba(255,170,0,.08);border:1px solid rgba(255,170,0,.25);color:var(--wn)}
+.dev-meta{display:flex;flex-wrap:wrap;gap:6px 16px}
+.dev-meta-item{font-family:var(--fmo);font-size:.6rem;color:var(--td)}
+.dev-meta-item span{color:var(--ts)}
+.dev-empty{font-family:var(--fmo);font-size:.72rem;color:var(--td);text-align:center;padding:24px 0}
+.dev-add-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:10px;border:1px dashed var(--br-l);border-radius:8px;background:transparent;color:var(--ts);font-family:var(--fmo);font-size:.65rem;cursor:pointer;transition:var(--tr);text-decoration:none;margin-top:4px}
+.dev-add-btn:hover{border-color:var(--ac-m);color:var(--ac);background:var(--ac-d)}
 
 /* ── MAIN ── */
 .main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
@@ -221,6 +241,10 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
         <div class="sb-key-val" id="sb-key-val">Click to set</div>
       </div>
     </div>
+    <div class="sb-devices" onclick="openDevicesModal()" title="Mes appareils">
+      <div class="sb-devices-icon">📡</div>
+      <div class="sb-devices-lbl">Mes appareils</div>
+    </div>
   </div>
 </aside>
 
@@ -278,6 +302,23 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
   </div>
 </div>
 
+</div>
+
+<!-- ── DEVICES MODAL ── -->
+<div class="modal-bg" id="devices-modal" style="display:none" onclick="if(event.target===this)closeDevicesModal()">
+  <div class="modal" style="width:480px" onclick="event.stopPropagation()">
+    <h2>Mes appareils</h2>
+    <p>Boîtiers OpenJarvis liés à votre compte.</p>
+    <div class="dev-list" id="dev-list">
+      <div class="dev-empty">Chargement…</div>
+    </div>
+    <a class="dev-add-btn" id="dev-add-btn" href="#" onclick="event.preventDefault();closeDevicesModal();window.open('/activate','_blank')">
+      + Associer un nouvel appareil
+    </a>
+    <div class="modal-btns" style="margin-top:14px">
+      <button class="modal-btn cancel" onclick="closeDevicesModal()">Fermer</button>
+    </div>
+  </div>
 </div>
 
 <!-- ── KEY MODAL ── -->
@@ -609,6 +650,57 @@ function setModel(m) {
     const el = document.getElementById('mp-' + k);
     if (el) el.classList.toggle('on', MODELS[m] === k);
   });
+}
+
+// ── Devices modal ────────────────────────────────────────────────────────────
+function openDevicesModal() {
+  document.getElementById('devices-modal').style.display = 'flex';
+  loadDevices();
+}
+function closeDevicesModal() { document.getElementById('devices-modal').style.display = 'none'; }
+
+async function loadDevices() {
+  const list = document.getElementById('dev-list');
+  const jwt = sessionStorage.getItem('clawbot_token');
+  if (!jwt) {
+    list.innerHTML = '<div class="dev-empty">Connectez-vous sur openjarvis.io pour voir vos appareils.</div>';
+    return;
+  }
+  list.innerHTML = '<div class="dev-empty">Chargement…</div>';
+  try {
+    const r = await fetch(CLOUD_URL + '/v1/devices', {
+      headers: { 'Authorization': 'Bearer ' + jwt }
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    const devices = data.devices || [];
+    if (!devices.length) {
+      list.innerHTML = '<div class="dev-empty">Aucun appareil associé à ce compte.</div>';
+      return;
+    }
+    list.innerHTML = devices.map(d => {
+      const name = d.board || d.device_id || d.mac || 'Appareil';
+      const mac = d.mac ? d.mac.match(/.{2}/g).join(':') : '—';
+      const seen = d.last_seen_at ? new Date(d.last_seen_at + 'Z').toLocaleString('fr-FR') : '—';
+      const badge = d.provisioned
+        ? '<span class="dev-badge ok">Actif</span>'
+        : '<span class="dev-badge pending">En attente</span>';
+      return `<div class="dev-card">
+        <div class="dev-card-head">
+          <div class="dev-card-name">${name}</div>
+          ${badge}
+        </div>
+        <div class="dev-meta">
+          <div class="dev-meta-item">MAC <span>${mac}</span></div>
+          ${d.firmware ? `<div class="dev-meta-item">FW <span>${d.firmware}</span></div>` : ''}
+          ${d.last_ip ? `<div class="dev-meta-item">IP <span>${d.last_ip}</span></div>` : ''}
+          <div class="dev-meta-item">Vu <span>${seen}</span></div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    list.innerHTML = `<div class="dev-empty" style="color:var(--er)">Erreur : ${e.message}</div>`;
+  }
 }
 
 // ── Key modal ────────────────────────────────────────────────────────────────
