@@ -857,10 +857,7 @@ function saveKey() {
 function doLogout() {
   sessionStorage.clear();
   localStorage.removeItem('oj_key');
-  apiKey = '';
-  updateKeyDisplay();
-  closeSettings();
-  toast('Déconnecté');
+  window.location.replace('https://openjarvis.io');
 }
 
 document.getElementById('key-inp').addEventListener('keydown', e => { if (e.key === 'Enter') saveKey(); });
