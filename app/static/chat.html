@@ -334,8 +334,25 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 
     <div style="overflow-y:auto;flex:1;scrollbar-width:thin;scrollbar-color:var(--br) transparent">
 
-      <!-- Compte -->
-      <div class="cfg-section" id="cfg-compte">
+      <!-- Compte — non connecté -->
+      <div class="cfg-section" id="cfg-compte-login">
+        <p style="font-family:var(--fmo);font-size:.72rem;color:var(--ts);margin:0">Connectez-vous pour accéder à vos appareils et à votre abonnement.</p>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <label style="font-family:var(--fmo);font-size:.58rem;color:var(--td);text-transform:uppercase;letter-spacing:.18em">Email</label>
+            <input class="cfg-key-inp" type="email" id="cfg-login-email" placeholder="vous@domaine.com" autocomplete="email">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <label style="font-family:var(--fmo);font-size:.58rem;color:var(--td);text-transform:uppercase;letter-spacing:.18em">Mot de passe</label>
+            <input class="cfg-key-inp" type="password" id="cfg-login-pwd" placeholder="••••••••" autocomplete="current-password">
+          </div>
+          <div id="cfg-login-msg" style="font-family:var(--fmo);font-size:.7rem;color:var(--er);display:none;padding:6px 10px;border:1px solid var(--er);background:rgba(255,56,96,.06)"></div>
+          <button class="cfg-btn primary" id="cfg-login-btn" onclick="doSettingsLogin()">Se connecter</button>
+        </div>
+      </div>
+
+      <!-- Compte — connecté -->
+      <div class="cfg-section hidden" id="cfg-compte">
         <div class="cfg-row">
           <span class="cfg-row-lbl">Email</span>
           <span class="cfg-row-val" id="cfg-email">—</span>
@@ -344,7 +361,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
           <span class="cfg-row-lbl">Plan</span>
           <span class="cfg-row-val"><span class="plan-badge" id="cfg-plan">—</span></span>
         </div>
-        <div class="cfg-row" id="cfg-key-row">
+        <div class="cfg-row">
           <span class="cfg-row-lbl">Clé d'abonnement</span>
           <span class="cfg-row-val" id="cfg-key-display" style="color:var(--td)">Non configurée</span>
         </div>
@@ -705,21 +722,30 @@ function setModel(m) {
 let _settingsTab = 'compte';
 
 function openSettings(tab) {
+  _refreshAccountUI();
   settingsTab(tab || _settingsTab);
-  // Populate account section
-  const email = sessionStorage.getItem('clawbot_email');
-  const plan  = sessionStorage.getItem('clawbot_plan');
-  const planLabels = { free:'Free', starter:'Starter', plus:'Plus', geek:'Geek', particulier:'Starter', pro:'Pro', pro_starter:'Pro Starter', pro_plus:'Pro Plus', business:'Business' };
-  document.getElementById('cfg-email').textContent = email || '—';
-  document.getElementById('cfg-plan').textContent = planLabels[plan] || plan || '—';
-  const kd = document.getElementById('cfg-key-display');
-  if (apiKey) { kd.textContent = apiKey.slice(0,8)+'••••••••'+apiKey.slice(-4); kd.style.color='var(--ok)'; }
-  else { kd.textContent = 'Non configurée'; kd.style.color='var(--er)'; }
   document.getElementById('key-inp').value = apiKey;
   document.getElementById('settings-modal').style.display = 'flex';
 }
 
 function closeSettings() { document.getElementById('settings-modal').style.display = 'none'; }
+
+function _refreshAccountUI() {
+  const jwt   = sessionStorage.getItem('clawbot_token');
+  const email = sessionStorage.getItem('clawbot_email');
+  const plan  = sessionStorage.getItem('clawbot_plan');
+  const loggedIn = !!jwt;
+  document.getElementById('cfg-compte-login').classList.toggle('hidden', loggedIn);
+  document.getElementById('cfg-compte').classList.toggle('hidden', !loggedIn);
+  if (loggedIn) {
+    const planLabels = { free:'Free', starter:'Starter', plus:'Plus', geek:'Geek', particulier:'Starter', pro:'Pro', pro_starter:'Pro Starter', pro_plus:'Pro Plus', business:'Business' };
+    document.getElementById('cfg-email').textContent = email || '—';
+    document.getElementById('cfg-plan').textContent = planLabels[plan] || plan || '—';
+    const kd = document.getElementById('cfg-key-display');
+    if (apiKey) { kd.textContent = apiKey.slice(0,8)+'••••••••'+apiKey.slice(-4); kd.style.color='var(--ok)'; }
+    else { kd.textContent = 'Non configurée'; kd.style.color='var(--er)'; }
+  }
+}
 
 function settingsTab(tab) {
   _settingsTab = tab;
@@ -727,9 +753,56 @@ function settingsTab(tab) {
     document.getElementById('cfg-t-' + t).classList.toggle('on', t === tab);
     document.getElementById('cfg-' + t).classList.toggle('hidden', t !== tab);
   });
+  // compte-login mirrors compte tab visibility
+  if (tab === 'compte') {
+    const jwt = sessionStorage.getItem('clawbot_token');
+    document.getElementById('cfg-compte-login').classList.toggle('hidden', !!jwt);
+    document.getElementById('cfg-compte').classList.toggle('hidden', !jwt);
+  } else {
+    document.getElementById('cfg-compte-login').classList.add('hidden');
+    document.getElementById('cfg-compte').classList.add('hidden');
+  }
   if (tab === 'appareils') loadDevices();
   if (tab === 'cle') setTimeout(() => document.getElementById('key-inp').focus(), 50);
 }
+
+async function doSettingsLogin() {
+  const btn = document.getElementById('cfg-login-btn');
+  const msg = document.getElementById('cfg-login-msg');
+  const email = document.getElementById('cfg-login-email').value.trim();
+  const pwd   = document.getElementById('cfg-login-pwd').value;
+  msg.style.display = 'none';
+  btn.disabled = true; btn.textContent = 'Connexion…';
+  try {
+    const r = await fetch(CLOUD_URL + '/v1/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: pwd }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.detail || 'Erreur de connexion');
+    sessionStorage.setItem('clawbot_token', data.access_token);
+    sessionStorage.setItem('clawbot_plan',  data.plan);
+    sessionStorage.setItem('clawbot_email', email);
+    if (data.sub_key && !apiKey) {
+      apiKey = data.sub_key;
+      localStorage.setItem('oj_key', apiKey);
+    }
+    updateKeyDisplay();
+    _refreshAccountUI();
+    settingsTab('compte');
+    toast('Connecté — ' + email);
+  } catch(e) {
+    msg.textContent = e.message;
+    msg.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Se connecter';
+  }
+}
+// Enter key on login form
+['cfg-login-email','cfg-login-pwd'].forEach(id => {
+  document.getElementById(id).addEventListener('keydown', e => { if(e.key==='Enter') doSettingsLogin(); });
+});
 
 async function loadDevices() {
   const list = document.getElementById('dev-list');
