@@ -52,34 +52,53 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .sb-item:hover .sb-item-del{opacity:.6}
 .sb-item-del:hover{opacity:1;background:var(--er);color:#fff}
 .sb-ft{padding:10px 12px 16px;border-top:1px solid var(--br);flex-shrink:0}
-.sb-key{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg-i);border:1px solid var(--br);border-radius:8px;cursor:pointer;transition:var(--tr)}
-.sb-key:hover{border-color:var(--ac-m);background:var(--bg-h)}
-.sb-key-icon{font-size:.85rem;flex-shrink:0}
-.sb-key-info{flex:1;overflow:hidden}
-.sb-key-lbl{font-family:var(--fmo);font-size:.5rem;color:var(--td);text-transform:uppercase;letter-spacing:1.5px}
-.sb-key-val{font-family:var(--fmo);font-size:.65rem;color:var(--ts);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sb-key-val.ok{color:var(--ok)}
-.sb-key-val.none{color:var(--er)}
-/* devices link in sidebar */
-.sb-devices{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:7px;cursor:pointer;transition:var(--tr);margin-top:6px}
-.sb-devices:hover{background:var(--bg-h)}
-.sb-devices-icon{font-size:.78rem;flex-shrink:0;opacity:.7}
-.sb-devices-lbl{font-family:var(--fmo);font-size:.58rem;color:var(--td);text-transform:uppercase;letter-spacing:1.5px}
-/* devices modal */
-.dev-list{display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto;margin-top:4px;scrollbar-width:thin;scrollbar-color:var(--br) transparent}
-.dev-card{padding:12px 14px;border:1px solid var(--br);border-radius:8px;background:var(--bg-i);display:flex;flex-direction:column;gap:6px;transition:var(--tr)}
+/* ── sidebar user/settings button ── */
+.sb-user{display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;background:var(--bg-i);border:1px solid var(--br);border-radius:8px;cursor:pointer;transition:var(--tr);text-align:left}
+.sb-user:hover{border-color:var(--ac-m);background:var(--bg-h)}
+.sb-user-av{width:28px;height:28px;border-radius:7px;background:linear-gradient(135deg,#00ffe020,#00b8ff20);border:1px solid var(--ac-m);display:flex;align-items:center;justify-content:center;font-size:.75rem;flex-shrink:0}
+.sb-user-info{flex:1;overflow:hidden}
+.sb-user-name{font-family:var(--fmo);font-size:.65rem;color:var(--ts);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-user-name.ok{color:var(--ok)}
+.sb-user-name.none{color:var(--er)}
+.sb-user-plan{font-family:var(--fmo);font-size:.5rem;color:var(--td);text-transform:uppercase;letter-spacing:1.2px;margin-top:1px}
+.sb-user-cog{font-size:.72rem;color:var(--td);flex-shrink:0;opacity:.6}
+/* ── settings modal ── */
+.cfg-tabs{display:flex;border-bottom:1px solid var(--br);margin:-4px -28px 18px;padding:0 28px}
+.cfg-tab{background:none;border:none;border-bottom:2px solid transparent;color:var(--td);font-family:var(--fmo);font-size:.6rem;letter-spacing:.15em;padding:8px 14px 10px;cursor:pointer;margin-bottom:-1px;transition:all .15s;text-transform:uppercase}
+.cfg-tab.on{color:var(--ac);border-bottom-color:var(--ac)}
+.cfg-tab:hover:not(.on){color:var(--ts)}
+.cfg-section{display:flex;flex-direction:column;gap:14px}
+.cfg-section.hidden{display:none}
+/* account info rows */
+.cfg-row{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:var(--bg-i);border:1px solid var(--br);border-radius:7px;font-family:var(--fmo);font-size:.72rem}
+.cfg-row-lbl{color:var(--td);text-transform:uppercase;font-size:.58rem;letter-spacing:.12em}
+.cfg-row-val{color:var(--ts);text-align:right;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.plan-badge{padding:2px 9px;border-radius:10px;background:var(--ac-d);border:1px solid var(--ac-m);color:var(--ac);font-size:.58rem;letter-spacing:.1em;text-transform:uppercase}
+.cfg-btn{width:100%;padding:9px;border-radius:7px;font-family:var(--fmo);font-size:.65rem;font-weight:600;letter-spacing:.12em;cursor:pointer;transition:var(--tr);text-transform:uppercase;border:1px solid}
+.cfg-btn.primary{background:linear-gradient(135deg,var(--ac),var(--ac2));border-color:transparent;color:var(--bg)}
+.cfg-btn.primary:hover{box-shadow:0 0 16px var(--ac-m)}
+.cfg-btn.danger{background:transparent;border-color:rgba(255,56,96,.3);color:var(--er)}
+.cfg-btn.danger:hover{background:rgba(255,56,96,.08)}
+.cfg-btn.ghost{background:transparent;border-color:var(--br);color:var(--ts)}
+.cfg-btn.ghost:hover{border-color:var(--br-l);color:var(--tp)}
+/* device cards */
+.dev-list{display:flex;flex-direction:column;gap:7px;max-height:300px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--br) transparent}
+.dev-card{padding:11px 13px;border:1px solid var(--br);border-radius:8px;background:var(--bg-i);display:flex;flex-direction:column;gap:5px}
 .dev-card:hover{border-color:var(--br-l)}
 .dev-card-head{display:flex;align-items:center;justify-content:space-between}
 .dev-card-name{font-family:var(--fmo);font-size:.72rem;font-weight:600;color:var(--tp)}
 .dev-badge{font-family:var(--fmo);font-size:.55rem;padding:2px 7px;border-radius:10px;letter-spacing:.1em;text-transform:uppercase}
 .dev-badge.ok{background:rgba(0,255,136,.1);border:1px solid rgba(0,255,136,.3);color:var(--ok)}
 .dev-badge.pending{background:rgba(255,170,0,.08);border:1px solid rgba(255,170,0,.25);color:var(--wn)}
-.dev-meta{display:flex;flex-wrap:wrap;gap:6px 16px}
+.dev-meta{display:flex;flex-wrap:wrap;gap:4px 14px}
 .dev-meta-item{font-family:var(--fmo);font-size:.6rem;color:var(--td)}
 .dev-meta-item span{color:var(--ts)}
-.dev-empty{font-family:var(--fmo);font-size:.72rem;color:var(--td);text-align:center;padding:24px 0}
-.dev-add-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:10px;border:1px dashed var(--br-l);border-radius:8px;background:transparent;color:var(--ts);font-family:var(--fmo);font-size:.65rem;cursor:pointer;transition:var(--tr);text-decoration:none;margin-top:4px}
-.dev-add-btn:hover{border-color:var(--ac-m);color:var(--ac);background:var(--ac-d)}
+.dev-empty{font-family:var(--fmo);font-size:.72rem;color:var(--td);text-align:center;padding:20px 0}
+/* key input */
+.cfg-key-inp{width:100%;padding:10px 13px;background:var(--bg-i);border:1px solid var(--br);border-radius:7px;color:var(--tp);font-family:var(--fmo);font-size:.75rem;outline:none;transition:var(--tr)}
+.cfg-key-inp:focus{border-color:var(--ac);box-shadow:0 0 0 2px var(--ac-d)}
+.cfg-key-inp::placeholder{color:var(--td)}
+.cfg-note{font-family:var(--fmo);font-size:.62rem;color:var(--td);padding:8px 11px;background:var(--ac-d);border:1px solid var(--ac-m);border-radius:6px;line-height:1.5}
 
 /* ── MAIN ── */
 .main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
@@ -234,17 +253,14 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
   </div>
   <div class="sb-list" id="sb-list"></div>
   <div class="sb-ft">
-    <div class="sb-key" onclick="openKeyModal()" title="Set subscription key">
-      <div class="sb-key-icon">🔑</div>
-      <div class="sb-key-info">
-        <div class="sb-key-lbl">Subscription key</div>
-        <div class="sb-key-val" id="sb-key-val">Click to set</div>
+    <button class="sb-user" onclick="openSettings()">
+      <div class="sb-user-av" id="sb-user-av">👤</div>
+      <div class="sb-user-info">
+        <div class="sb-user-name" id="sb-user-name">Clé non configurée</div>
+        <div class="sb-user-plan" id="sb-user-plan">Paramètres</div>
       </div>
-    </div>
-    <div class="sb-devices" onclick="openDevicesModal()" title="Mes appareils">
-      <div class="sb-devices-icon">📡</div>
-      <div class="sb-devices-lbl">Mes appareils</div>
-    </div>
+      <div class="sb-user-cog">⚙</div>
+    </button>
   </div>
 </aside>
 
@@ -304,34 +320,57 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 
 </div>
 
-<!-- ── DEVICES MODAL ── -->
-<div class="modal-bg" id="devices-modal" style="display:none" onclick="if(event.target===this)closeDevicesModal()">
-  <div class="modal" style="width:480px" onclick="event.stopPropagation()">
-    <h2>Mes appareils</h2>
-    <p>Boîtiers OpenJarvis liés à votre compte.</p>
-    <div class="dev-list" id="dev-list">
-      <div class="dev-empty">Chargement…</div>
-    </div>
-    <a class="dev-add-btn" id="dev-add-btn" href="#" onclick="event.preventDefault();closeDevicesModal();window.open('/activate','_blank')">
-      + Associer un nouvel appareil
-    </a>
-    <div class="modal-btns" style="margin-top:14px">
-      <button class="modal-btn cancel" onclick="closeDevicesModal()">Fermer</button>
-    </div>
-  </div>
-</div>
+<!-- ── SETTINGS MODAL ── -->
+<div class="modal-bg" id="settings-modal" style="display:none" onclick="if(event.target===this)closeSettings()">
+  <div class="modal" style="width:500px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden" onclick="event.stopPropagation()">
+    <h2>Configuration</h2>
+    <p style="margin-bottom:0">Compte, appareils et clé d'abonnement.</p>
 
-<!-- ── KEY MODAL ── -->
-<div class="modal-bg" id="key-modal" style="display:none" onclick="if(e.target===this)closeKeyModal()">
-  <div class="modal" onclick="event.stopPropagation()">
-    <h2>Subscription Key</h2>
-    <p>Enter your OpenJarvis subscription key to start chatting. Your key is stored locally and never sent anywhere except the API.</p>
-    <input class="modal-fi" type="password" id="key-inp" placeholder="clb-p-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" autocomplete="off">
-    <div class="modal-btns">
-      <button class="modal-btn cancel" onclick="closeKeyModal()">Cancel</button>
-      <button class="modal-btn save" onclick="saveKey()">Save</button>
+    <div class="cfg-tabs">
+      <button class="cfg-tab on" id="cfg-t-compte" onclick="settingsTab('compte')">Compte</button>
+      <button class="cfg-tab" id="cfg-t-appareils" onclick="settingsTab('appareils')">Appareils</button>
+      <button class="cfg-tab" id="cfg-t-cle" onclick="settingsTab('cle')">Clé d'abo</button>
     </div>
-    <div class="modal-note">Your key authenticates directly with clawbot-api.yumi-lab.com — no intermediary stores it.</div>
+
+    <div style="overflow-y:auto;flex:1;scrollbar-width:thin;scrollbar-color:var(--br) transparent">
+
+      <!-- Compte -->
+      <div class="cfg-section" id="cfg-compte">
+        <div class="cfg-row">
+          <span class="cfg-row-lbl">Email</span>
+          <span class="cfg-row-val" id="cfg-email">—</span>
+        </div>
+        <div class="cfg-row">
+          <span class="cfg-row-lbl">Plan</span>
+          <span class="cfg-row-val"><span class="plan-badge" id="cfg-plan">—</span></span>
+        </div>
+        <div class="cfg-row" id="cfg-key-row">
+          <span class="cfg-row-lbl">Clé d'abonnement</span>
+          <span class="cfg-row-val" id="cfg-key-display" style="color:var(--td)">Non configurée</span>
+        </div>
+        <button class="cfg-btn ghost" onclick="settingsTab('cle')">Modifier la clé →</button>
+        <button class="cfg-btn danger" onclick="doLogout()">Se déconnecter</button>
+      </div>
+
+      <!-- Appareils -->
+      <div class="cfg-section hidden" id="cfg-appareils">
+        <div class="dev-list" id="dev-list"><div class="dev-empty">Chargement…</div></div>
+        <button class="cfg-btn ghost" onclick="window.open('/activate','_blank')">+ Associer un nouvel appareil</button>
+      </div>
+
+      <!-- Clé -->
+      <div class="cfg-section hidden" id="cfg-cle">
+        <p style="font-family:var(--fmo);font-size:.72rem;color:var(--ts);margin:0">Entre ta clé d'abonnement OpenJarvis pour discuter avec l'IA.</p>
+        <input class="cfg-key-inp" type="password" id="key-inp" placeholder="clb-p-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" autocomplete="off">
+        <button class="cfg-btn primary" onclick="saveKey()">Enregistrer la clé</button>
+        <div class="cfg-note">La clé s'authentifie directement sur clawbot-api.yumi-lab.com — elle n'est pas stockée côté serveur.</div>
+      </div>
+
+    </div>
+
+    <div class="modal-btns" style="padding-top:16px;border-top:1px solid var(--br);margin-top:16px">
+      <button class="modal-btn cancel" onclick="closeSettings()">Fermer</button>
+    </div>
   </div>
 </div>
 
@@ -402,13 +441,23 @@ function renderSidebar() {
 }
 
 function updateKeyDisplay() {
-  const el = document.getElementById('sb-key-val');
-  if (apiKey) {
-    el.textContent = apiKey.slice(0, 8) + '••••••••' + apiKey.slice(-4);
-    el.className = 'sb-key-val ok';
+  const nameEl = document.getElementById('sb-user-name');
+  const planEl = document.getElementById('sb-user-plan');
+  const email = sessionStorage.getItem('clawbot_email');
+  const plan  = sessionStorage.getItem('clawbot_plan');
+  if (email) {
+    nameEl.textContent = email;
+    nameEl.className = 'sb-user-name ok';
+    const planLabels = { free:'Free', starter:'Starter', plus:'Plus', geek:'Geek', particulier:'Starter', pro:'Pro', pro_starter:'Pro Starter', pro_plus:'Pro Plus', business:'Business' };
+    planEl.textContent = planLabels[plan] || plan || 'Connecté';
+  } else if (apiKey) {
+    nameEl.textContent = apiKey.slice(0, 8) + '••••••••';
+    nameEl.className = 'sb-user-name ok';
+    planEl.textContent = 'Clé configurée';
   } else {
-    el.textContent = 'Click to set';
-    el.className = 'sb-key-val none';
+    nameEl.textContent = 'Clé non configurée';
+    nameEl.className = 'sb-user-name none';
+    planEl.textContent = 'Paramètres';
   }
 }
 
@@ -652,74 +701,93 @@ function setModel(m) {
   });
 }
 
-// ── Devices modal ────────────────────────────────────────────────────────────
-function openDevicesModal() {
-  document.getElementById('devices-modal').style.display = 'flex';
-  loadDevices();
+// ── Settings modal ────────────────────────────────────────────────────────────
+let _settingsTab = 'compte';
+
+function openSettings(tab) {
+  settingsTab(tab || _settingsTab);
+  // Populate account section
+  const email = sessionStorage.getItem('clawbot_email');
+  const plan  = sessionStorage.getItem('clawbot_plan');
+  const planLabels = { free:'Free', starter:'Starter', plus:'Plus', geek:'Geek', particulier:'Starter', pro:'Pro', pro_starter:'Pro Starter', pro_plus:'Pro Plus', business:'Business' };
+  document.getElementById('cfg-email').textContent = email || '—';
+  document.getElementById('cfg-plan').textContent = planLabels[plan] || plan || '—';
+  const kd = document.getElementById('cfg-key-display');
+  if (apiKey) { kd.textContent = apiKey.slice(0,8)+'••••••••'+apiKey.slice(-4); kd.style.color='var(--ok)'; }
+  else { kd.textContent = 'Non configurée'; kd.style.color='var(--er)'; }
+  document.getElementById('key-inp').value = apiKey;
+  document.getElementById('settings-modal').style.display = 'flex';
 }
-function closeDevicesModal() { document.getElementById('devices-modal').style.display = 'none'; }
+
+function closeSettings() { document.getElementById('settings-modal').style.display = 'none'; }
+
+function settingsTab(tab) {
+  _settingsTab = tab;
+  ['compte','appareils','cle'].forEach(t => {
+    document.getElementById('cfg-t-' + t).classList.toggle('on', t === tab);
+    document.getElementById('cfg-' + t).classList.toggle('hidden', t !== tab);
+  });
+  if (tab === 'appareils') loadDevices();
+  if (tab === 'cle') setTimeout(() => document.getElementById('key-inp').focus(), 50);
+}
 
 async function loadDevices() {
   const list = document.getElementById('dev-list');
   const jwt = sessionStorage.getItem('clawbot_token');
   if (!jwt) {
-    list.innerHTML = '<div class="dev-empty">Connectez-vous sur openjarvis.io pour voir vos appareils.</div>';
+    list.innerHTML = '<div class="dev-empty">Connectez-vous via openjarvis.io pour voir vos appareils.</div>';
     return;
   }
   list.innerHTML = '<div class="dev-empty">Chargement…</div>';
   try {
-    const r = await fetch(CLOUD_URL + '/v1/devices', {
-      headers: { 'Authorization': 'Bearer ' + jwt }
-    });
+    const r = await fetch(CLOUD_URL + '/v1/devices', { headers: { 'Authorization': 'Bearer ' + jwt } });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const data = await r.json();
     const devices = data.devices || [];
-    if (!devices.length) {
-      list.innerHTML = '<div class="dev-empty">Aucun appareil associé à ce compte.</div>';
-      return;
-    }
+    if (!devices.length) { list.innerHTML = '<div class="dev-empty">Aucun appareil associé à ce compte.</div>'; return; }
     list.innerHTML = devices.map(d => {
       const name = d.board || d.device_id || d.mac || 'Appareil';
       const mac = d.mac ? d.mac.match(/.{2}/g).join(':') : '—';
-      const seen = d.last_seen_at ? new Date(d.last_seen_at + 'Z').toLocaleString('fr-FR') : '—';
-      const badge = d.provisioned
-        ? '<span class="dev-badge ok">Actif</span>'
-        : '<span class="dev-badge pending">En attente</span>';
+      const seen = d.last_seen_at ? new Date(d.last_seen_at+'Z').toLocaleString('fr-FR') : '—';
+      const badge = d.provisioned ? '<span class="dev-badge ok">Actif</span>' : '<span class="dev-badge pending">En attente</span>';
       return `<div class="dev-card">
-        <div class="dev-card-head">
-          <div class="dev-card-name">${name}</div>
-          ${badge}
-        </div>
+        <div class="dev-card-head"><div class="dev-card-name">${name}</div>${badge}</div>
         <div class="dev-meta">
           <div class="dev-meta-item">MAC <span>${mac}</span></div>
-          ${d.firmware ? `<div class="dev-meta-item">FW <span>${d.firmware}</span></div>` : ''}
-          ${d.last_ip ? `<div class="dev-meta-item">IP <span>${d.last_ip}</span></div>` : ''}
+          ${d.firmware?`<div class="dev-meta-item">FW <span>${d.firmware}</span></div>`:''}
+          ${d.last_ip?`<div class="dev-meta-item">IP <span>${d.last_ip}</span></div>`:''}
           <div class="dev-meta-item">Vu <span>${seen}</span></div>
-        </div>
-      </div>`;
+        </div></div>`;
     }).join('');
-  } catch(e) {
-    list.innerHTML = `<div class="dev-empty" style="color:var(--er)">Erreur : ${e.message}</div>`;
-  }
+  } catch(e) { list.innerHTML = `<div class="dev-empty" style="color:var(--er)">Erreur : ${e.message}</div>`; }
 }
 
-// ── Key modal ────────────────────────────────────────────────────────────────
-function openKeyModal() {
-  document.getElementById('key-inp').value = apiKey;
-  document.getElementById('key-modal').style.display = 'flex';
-  setTimeout(() => document.getElementById('key-inp').focus(), 50);
-}
-function closeKeyModal() { document.getElementById('key-modal').style.display = 'none'; }
 function saveKey() {
   const v = document.getElementById('key-inp').value.trim();
-  if (!v) { toast('Please enter a subscription key', true); return; }
+  if (!v) { toast('Entre une clé d\'abonnement', true); return; }
   apiKey = v;
   localStorage.setItem('oj_key', v);
   updateKeyDisplay();
-  closeKeyModal();
-  toast('Key saved');
+  const kd = document.getElementById('cfg-key-display');
+  if (kd) { kd.textContent = apiKey.slice(0,8)+'••••••••'+apiKey.slice(-4); kd.style.color='var(--ok)'; }
+  closeSettings();
+  toast('Clé enregistrée');
 }
+
+function doLogout() {
+  sessionStorage.clear();
+  localStorage.removeItem('oj_key');
+  apiKey = '';
+  updateKeyDisplay();
+  closeSettings();
+  toast('Déconnecté');
+}
+
 document.getElementById('key-inp').addEventListener('keydown', e => { if (e.key === 'Enter') saveKey(); });
+
+// legacy aliases (garde la compatibilité avec d'éventuelles calls existantes)
+function openKeyModal() { openSettings('cle'); }
+function closeKeyModal() { closeSettings(); }
 
 // ── Rendering ────────────────────────────────────────────────────────────────
 function removeWelcome() {
@@ -959,8 +1027,8 @@ setChatMode(chatMode);
 updateKeyDisplay();
 renderSidebar();
 newChat();
-// Auto-open key modal if no key set
-if (!apiKey) setTimeout(openKeyModal, 800);
+// Auto-open settings if no key set
+if (!apiKey) setTimeout(() => openSettings('cle'), 800);
 </script>
 </body>
 </html>
