@@ -392,6 +392,13 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 </div>
 
 <script>
+// ── Auth guard ───────────────────────────────────────────────────────────────
+(function(){
+  const key = localStorage.getItem('oj_key') || localStorage.getItem('clawbot_subkey');
+  const jwt = sessionStorage.getItem('clawbot_token');
+  if (!key && !jwt) window.location.replace('https://openjarvis.io');
+})();
+
 // ── Config ──────────────────────────────────────────────────────────────────
 const CLOUD_URL = 'https://clawbot-api.yumi-lab.com';
 const MODELS = {
@@ -1100,8 +1107,6 @@ setChatMode(chatMode);
 updateKeyDisplay();
 renderSidebar();
 newChat();
-// Auto-open settings if no key set
-if (!apiKey) setTimeout(() => openSettings('cle'), 800);
 </script>
 </body>
 </html>
