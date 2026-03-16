@@ -68,7 +68,7 @@ PLAN_LIMITS = {
         "price_eur":       39,
     },
     "pro": {
-        "tokens_per_day":  1_000_000,
+        "tokens_per_day":  10_000_000,
         "model_ceiling":   "claude-opus-4-6",
         "agents_included": 15,
         "speed":           "priority",
