@@ -25,6 +25,47 @@ router = APIRouter(tags=["llm"])
 ANTHROPIC_BASE_URL = os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com/v1")
 ANTHROPIC_API_KEY  = os.environ.get("ANTHROPIC_API_KEY", "")
 
+# All models per provider, in ascending capability order
+_PROVIDER_MODELS = {
+    "anthropic": [
+        {"id": "claude-haiku-4-5-20251001", "group": "Claude"},
+        {"id": "claude-sonnet-4-6",         "group": "Claude"},
+        {"id": "claude-opus-4-6",           "group": "Claude"},
+    ],
+    "moonshot": [
+        {"id": "kimi-for-coding", "group": "Kimi"},
+    ],
+    "deepseek": [
+        {"id": "deepseek-chat",     "group": "DeepSeek"},
+        {"id": "deepseek-coder-v2", "group": "DeepSeek"},
+    ],
+    "openai": [
+        {"id": "gpt-4o-mini",  "group": "GPT"},
+        {"id": "gpt-4o",       "group": "GPT"},
+        {"id": "gpt-4-turbo",  "group": "GPT"},
+    ],
+}
+
+
+@router.get("/v1/models")
+async def list_models(authorization: str = Header(default="")):
+    """Return available models — only for providers with a configured API key."""
+    import time as _time
+    from app.config import PROVIDER_KEYS
+    models = []
+    for provider, entries in _PROVIDER_MODELS.items():
+        if not PROVIDER_KEYS.get(provider):
+            continue
+        for m in entries:
+            models.append({
+                "id":       m["id"],
+                "object":   "model",
+                "created":  int(_time.time()),
+                "owned_by": provider,
+                "group":    m["group"],
+            })
+    return {"object": "list", "data": models}
+
 
 # ── Device tunnel routing ──────────────────────────────────────────────────────
 
@@ -141,6 +182,182 @@ def _check_and_record_tokens(user: User, tokens_used: int, db: Session):
         raise HTTPException(429, f"Daily token limit reached ({limit} tokens/day for plan '{user.plan}')")
     user.tokens_used_today += tokens_used
     db.commit()
+
+
+@router.post("/v1/kimi-web-search")
+async def kimi_web_search(request: Request, authorization: str = Header(...)):
+    """Proxy Kimi $web_search builtin — Pi calls this with its sub_key, cloud uses Moonshot key."""
+    sub_key = authorization.removeprefix("Bearer ").strip()
+    db = SessionLocal()
+    try:
+        user = _get_user_by_sub_key(sub_key, db)
+        if not user:
+            raise HTTPException(401, "Invalid or inactive subscription key")
+        body = await request.json()
+        query = body.get("query", "").strip()
+        max_results = min(int(body.get("max_results", 5)), 10)
+        if not query:
+            raise HTTPException(400, "query required")
+        moonshot_key = PROVIDER_KEYS.get("moonshot", "")
+        if not moonshot_key:
+            raise HTTPException(503, "Moonshot API not configured on this server")
+        moonshot_url = PROVIDER_URLS["moonshot"]
+
+        def _call(messages, extra_params=None):
+            import json as _json
+            payload_dict = {
+                "model": "kimi-for-coding",
+                "stream": False,
+                "max_tokens": 1500,
+                "messages": messages,
+                "tools": [{"type": "builtin_function", "function": {"name": "$web_search"}}],
+            }
+            if extra_params:
+                payload_dict.update(extra_params)
+            payload = _json.dumps(payload_dict).encode()
+            req = urllib.request.Request(
+                f"{moonshot_url}/chat/completions", data=payload,
+                headers={"Content-Type": "application/json",
+                         "Authorization": f"Bearer {moonshot_key}",
+                         "User-Agent": "claude-code/1.0"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=60) as r:
+                return _json.loads(r.read())
+
+        msgs = [{"role": "user", "content": f"Search the web for: {query}\nReturn the top {max_results} results as a numbered list: title, URL, brief description."}]
+        try:
+            r1 = _call(msgs)
+        except Exception as e:
+            raise HTTPException(502, f"Kimi API error: {e}")
+
+        choice = r1.get("choices", [{}])[0]
+        msg1 = choice.get("message", {})
+        tool_calls = msg1.get("tool_calls", [])
+        content = ""
+        if tool_calls:
+            assistant_msg = {
+                "role": "assistant",
+                "content": msg1.get("content") or "",
+                "tool_calls": tool_calls,
+            }
+            reasoning = msg1.get("reasoning_content", "")
+            if reasoning:
+                # Kimi thinking was active — pass reasoning_content in round-2 assistant message
+                assistant_msg["reasoning_content"] = reasoning
+                r2_extra = None
+            else:
+                # Kimi thinking produced nothing — explicitly disable it in round-2 to avoid 400
+                r2_extra = {"thinking": {"type": "disabled"}}
+            msgs.append(assistant_msg)
+            for tc in tool_calls:
+                msgs.append({"role": "tool", "tool_call_id": tc.get("id", ""), "content": ""})
+            try:
+                r2 = _call(msgs, extra_params=r2_extra)
+                content = r2.get("choices", [{}])[0].get("message", {}).get("content", "")
+            except Exception as e:
+                raise HTTPException(502, f"Kimi round-2 error: {e}")
+        else:
+            content = msg1.get("content", "")
+
+        return JSONResponse({"result": content, "query": query})
+    finally:
+        db.close()
+
+
+@router.post("/v1/claude-web-search")
+async def claude_web_search(request: Request, authorization: str = Header(...)):
+    """Proxy Claude web_search tool — Pi calls this with its sub_key, cloud uses Anthropic key."""
+    sub_key = authorization.removeprefix("Bearer ").strip()
+    db = SessionLocal()
+    try:
+        user = _get_user_by_sub_key(sub_key, db)
+        if not user:
+            raise HTTPException(401, "Invalid or inactive subscription key")
+        body = await request.json()
+        query = body.get("query", "").strip()
+        max_results = min(int(body.get("max_results", 5)), 10)
+        if not query:
+            raise HTTPException(400, "query required")
+        if not ANTHROPIC_API_KEY:
+            raise HTTPException(503, "Anthropic API not configured on this server")
+
+        payload = json.dumps({
+            "model": "claude-haiku-4-5-20251001",
+            "max_tokens": 1500,
+            "messages": [{"role": "user", "content": f"Search the web for: {query}\nReturn the top {max_results} results as a numbered list: title, URL, brief description."}],
+            "tools": [{"type": "web_search_20250305", "name": "web_search"}],
+        }).encode()
+        req = urllib.request.Request(
+            f"{ANTHROPIC_BASE_URL}/messages",
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "x-api-key": ANTHROPIC_API_KEY,
+                "anthropic-version": "2023-06-01",
+                "anthropic-beta": "web-search-2025-03-05",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                result = json.loads(r.read())
+        except Exception as e:
+            raise HTTPException(502, f"Claude API error: {e}")
+
+        parts = [b.get("text", "") for b in result.get("content", []) if b.get("type") == "text"]
+        content = "\n".join(parts).strip()
+        if content:
+            return JSONResponse({"result": content, "query": query})
+        return JSONResponse({"result": "", "query": query})
+    finally:
+        db.close()
+
+
+async def _tunnel_get(mac: str, endpoint: str):
+    """Tunnel a simple GET request to a device endpoint and return JSON."""
+    from app.routers.ws import manager
+
+    request_id = str(_uuid.uuid4())
+    q = manager.register_request(request_id)
+
+    ok = await manager.send_to(mac, {
+        "type": "get_request",
+        "request_id": request_id,
+        "endpoint": endpoint,
+    })
+    if not ok:
+        manager.cleanup_request(request_id)
+        raise HTTPException(502, "Device is offline")
+
+    try:
+        msg = await asyncio.wait_for(q.get(), timeout=30.0)
+        mtype = msg.get("type")
+        if mtype == "get_error":
+            raise HTTPException(msg.get("status", 502), msg.get("error", "device error"))
+        return JSONResponse(msg.get("data", {}))
+    except asyncio.TimeoutError:
+        raise HTTPException(504, "Device timeout (30s)")
+    finally:
+        manager.cleanup_request(request_id)
+
+
+@router.get("/v1/agents")
+async def get_agents(authorization: str = Header(...)):
+    """Fetch agent list from user's device via WebSocket tunnel → GET /core/agents."""
+    sub_key = authorization.removeprefix("Bearer ").strip()
+    db = SessionLocal()
+    try:
+        user = _get_user_by_sub_key(sub_key, db)
+        if not user:
+            raise HTTPException(401, "Invalid or inactive subscription key")
+        from app.routers.ws import manager as _mgr
+        device_mac = _mgr.get_online_mac_for_user(user.devices)
+        if not device_mac:
+            raise HTTPException(503, "No device online for this account")
+        return await _tunnel_get(device_mac, "/core/agents")
+    finally:
+        db.close()
 
 
 @router.post("/v1/picoclaw-agent")

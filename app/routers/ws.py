@@ -219,7 +219,8 @@ async def device_ws(websocket: WebSocket, mac: str | None = None):
             elif msg_type == "ping":
                 await websocket.send_json({"type": "pong"})
 
-            elif msg_type in ("chat_chunk", "chat_done", "chat_error"):
+            elif msg_type in ("chat_chunk", "chat_done", "chat_error",
+                                "get_response", "get_error"):
                 rid = data.get("request_id")
                 if rid:
                     manager.resolve_request(rid, data)
