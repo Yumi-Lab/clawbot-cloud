@@ -140,5 +140,13 @@ PLAN_ROUTING = {
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 ANTHROPIC_BASE_URL = "https://api.anthropic.com/v1"
 
+# ── Voice pipeline ────────────────────────────────────────────────────────────
+WHISPER_API_KEY = os.getenv("WHISPER_API_KEY", os.getenv("OPENAI_API_KEY", ""))
+DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY", "")
+ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
+DEFAULT_STT_LANGUAGE = os.getenv("DEFAULT_STT_LANGUAGE", "fr")
+DEFAULT_TTS_VOICE = os.getenv("DEFAULT_TTS_VOICE", "fr-FR-DeniseNeural")
+TTS_MAX_CHARS = 1500
+
 # Activation token TTL
 ACTIVATION_TOKEN_TTL_MINUTES = 30
