@@ -106,34 +106,47 @@ PLAN_LIMITS = {
 # Pi is always blind to provider — it just uses its sub_key → cloud picks provider.
 
 PROVIDER_KEYS = {
-    "anthropic": os.getenv("ANTHROPIC_API_KEY", ""),
-    "moonshot":  os.getenv("MOONSHOT_API_KEY", ""),
-    "deepseek":  os.getenv("DEEPSEEK_API_KEY", ""),
-    "openai":    os.getenv("OPENAI_API_KEY", ""),
+    "anthropic":  os.getenv("ANTHROPIC_API_KEY", ""),
+    "moonshot":   os.getenv("MOONSHOT_API_KEY", ""),
+    "deepseek":   os.getenv("DEEPSEEK_API_KEY", ""),
+    "openai":     os.getenv("OPENAI_API_KEY", ""),
+    "dashscope":  os.getenv("DASHSCOPE_API_KEY", ""),
 }
 
 PROVIDER_URLS = {
-    "anthropic": "https://api.anthropic.com/v1",
-    "moonshot":  "https://api.kimi.com/coding/v1",
-    "deepseek":  "https://api.deepseek.com/v1",
-    "openai":    "https://api.openai.com/v1",
+    "anthropic":  "https://api.anthropic.com/v1",
+    "moonshot":   "https://api.kimi.com/coding/v1",
+    "deepseek":   "https://api.deepseek.com/v1",
+    "openai":     "https://api.openai.com/v1",
+    "dashscope":  "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
 }
 
 # Ordered list per plan — first provider with a key available wins.
 PLAN_ROUTING = {
     "free": [
-        {"provider": "moonshot",  "model": "kimi-for-coding"},
-        {"provider": "anthropic", "model": "claude-haiku-4-5-20251001"},
+        {"provider": "dashscope",  "model": "qwen3.5-flash"},
+        {"provider": "moonshot",   "model": "kimi-for-coding"},
+        {"provider": "anthropic",  "model": "claude-haiku-4-5-20251001"},
     ],
-    "starter":     [{"provider": "anthropic", "model": "claude-sonnet-4-6"}],
-    "plus":        [{"provider": "anthropic", "model": "claude-sonnet-4-6"}],
-    "geek":        [{"provider": "anthropic", "model": "claude-opus-4-6"}],
-    "pro_starter": [{"provider": "anthropic", "model": "claude-opus-4-6"}],
-    "pro":         [{"provider": "anthropic", "model": "claude-opus-4-6"}],
-    "pro_plus":    [{"provider": "anthropic", "model": "claude-opus-4-6"}],
-    "business":    [{"provider": "anthropic", "model": "claude-opus-4-6"}],
+    "starter": [
+        {"provider": "dashscope",  "model": "qwen3.5-plus"},
+        {"provider": "anthropic",  "model": "claude-sonnet-4-6"},
+    ],
+    "plus":        [{"provider": "anthropic", "model": "claude-sonnet-4-6"},
+                    {"provider": "dashscope", "model": "qwen3-max"}],
+    "geek":        [{"provider": "anthropic", "model": "claude-opus-4-6"},
+                    {"provider": "dashscope", "model": "qwen3-coder-plus"}],
+    "pro_starter": [{"provider": "anthropic", "model": "claude-opus-4-6"},
+                    {"provider": "dashscope", "model": "qwen3-max"}],
+    "pro":         [{"provider": "anthropic", "model": "claude-opus-4-6"},
+                    {"provider": "deepseek",  "model": "deepseek-chat"}],
+    "pro_plus":    [{"provider": "anthropic", "model": "claude-opus-4-6"},
+                    {"provider": "deepseek",  "model": "deepseek-chat"}],
+    "business":    [{"provider": "anthropic", "model": "claude-opus-4-6"},
+                    {"provider": "deepseek",  "model": "deepseek-chat"}],
     # Legacy
-    "particulier": [{"provider": "anthropic", "model": "claude-sonnet-4-6"}],
+    "particulier": [{"provider": "anthropic", "model": "claude-sonnet-4-6"},
+                    {"provider": "dashscope", "model": "qwen3.5-plus"}],
 }
 
 # Upstream LLM provider (legacy — kept for llm_proxy backward compat)

@@ -39,6 +39,15 @@ _PROVIDER_MODELS = {
         {"id": "deepseek-chat",     "group": "DeepSeek"},
         {"id": "deepseek-coder-v2", "group": "DeepSeek"},
     ],
+    "dashscope": [
+        {"id": "qwen3.5-flash",      "group": "Qwen"},
+        {"id": "qwen-turbo",         "group": "Qwen"},
+        {"id": "qwen3.5-plus",       "group": "Qwen"},
+        {"id": "qwen3-max",          "group": "Qwen"},
+        {"id": "qwen3-coder-plus",   "group": "Qwen"},
+        {"id": "qwen3-coder-flash",  "group": "Qwen"},
+        {"id": "qwq-plus",           "group": "Qwen"},
+    ],
     "openai": [
         {"id": "gpt-4o-mini",  "group": "GPT"},
         {"id": "gpt-4o",       "group": "GPT"},
@@ -416,14 +425,22 @@ async def chat_completions(request: Request, authorization: str = Header(...)):
         selected = next((r for r in routing if PROVIDER_KEYS.get(r["provider"])), routing[0])
         provider = selected["provider"]
 
-        # Respect user-requested model if within plan ceiling or a Kimi model.
+        # Respect user-requested model if within plan ceiling or a budget provider model.
         requested_model = body.get("model", "")
         ceiling = plan_cfg["model_ceiling"]
+        # All known Qwen model IDs (DashScope) — always allowed as budget provider
+        _QWEN_MODELS = {m["id"] for m in _PROVIDER_MODELS.get("dashscope", [])}
         if (requested_model
                 and requested_model == "kimi-for-coding"
                 and PROVIDER_KEYS.get("moonshot")):
             # KimiCode model explicitly requested — always allowed (budget provider)
             provider = "moonshot"
+            body["model"] = requested_model
+        elif (requested_model
+                and requested_model in _QWEN_MODELS
+                and PROVIDER_KEYS.get("dashscope")):
+            # Qwen model explicitly requested — always allowed (budget provider)
+            provider = "dashscope"
             body["model"] = requested_model
         elif (requested_model
                 and requested_model in MODEL_HIERARCHY
