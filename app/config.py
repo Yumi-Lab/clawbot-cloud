@@ -152,8 +152,8 @@ PLAN_ROUTING = {
 # ── Throttle settings ────────────────────────────────────────────────────────
 # When user exceeds daily quota: degrade speed, never cut service (telecom model).
 THROTTLE_DELAY_SECONDS = 60
-THROTTLE_MODEL = {"provider": "dashscope", "model": "qwen3.5-flash"}
-THROTTLE_FALLBACK = {"provider": "anthropic", "model": "claude-haiku-4-5-20251001"}
+THROTTLE_MODEL = {"provider": "moonshot", "model": "kimi-for-coding"}
+THROTTLE_FALLBACK = {"provider": "dashscope", "model": "qwen3.5-flash"}
 
 # Upstream LLM provider (legacy — kept for llm_proxy backward compat)
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
