@@ -68,7 +68,7 @@ PLAN_LIMITS = {
         "price_eur":       39,
     },
     "pro": {
-        "tokens_per_day":  10_000_000,
+        "tokens_per_day":  50_000_000,
         "model_ceiling":   "claude-opus-4-6",
         "agents_included": 15,
         "speed":           "priority",
@@ -76,7 +76,7 @@ PLAN_LIMITS = {
         "price_eur":       189,
     },
     "pro_plus": {
-        "tokens_per_day":  6_000_000,
+        "tokens_per_day":  100_000_000,
         "model_ceiling":   "claude-opus-4-6",
         "agents_included": 30,
         "speed":           "priority",
@@ -84,7 +84,7 @@ PLAN_LIMITS = {
         "price_eur":       300,
     },
     "business": {
-        "tokens_per_day":  20_000_000,
+        "tokens_per_day":  200_000_000,
         "model_ceiling":   "claude-opus-4-6",
         "agents_included": 9999,
         "speed":           "priority",
@@ -148,6 +148,12 @@ PLAN_ROUTING = {
     "particulier": [{"provider": "anthropic", "model": "claude-sonnet-4-6"},
                     {"provider": "dashscope", "model": "qwen3.5-plus"}],
 }
+
+# ── Throttle settings ────────────────────────────────────────────────────────
+# When user exceeds daily quota: degrade speed, never cut service (telecom model).
+THROTTLE_DELAY_SECONDS = 60
+THROTTLE_MODEL = {"provider": "dashscope", "model": "qwen3.5-flash"}
+THROTTLE_FALLBACK = {"provider": "anthropic", "model": "claude-haiku-4-5-20251001"}
 
 # Upstream LLM provider (legacy — kept for llm_proxy backward compat)
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")

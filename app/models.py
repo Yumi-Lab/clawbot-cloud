@@ -43,6 +43,7 @@ class User(Base):
     # Rate limiting counters (reset daily)
     tokens_used_today = Column(Integer, default=0)
     tokens_reset_at = Column(DateTime, nullable=True)
+    last_throttled_at = Column(DateTime, nullable=True)  # last request while over quota
     created_at = Column(DateTime, default=datetime.utcnow)
 
     devices = relationship("Device", back_populates="owner")
@@ -65,7 +66,6 @@ class Device(Base):
     # Provisioning
     provisioned = Column(Boolean, default=False)
     # Service status (from heartbeat)
-    picoclaw_status = Column(String(16), nullable=True)
     core_status = Column(String(16), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 

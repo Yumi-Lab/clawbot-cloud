@@ -16,7 +16,10 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.config import PLAN_LIMITS, PLAN_ROUTING, PROVIDER_KEYS, PROVIDER_URLS, MODEL_HIERARCHY
+from app.config import (
+    PLAN_LIMITS, PLAN_ROUTING, PROVIDER_KEYS, PROVIDER_URLS, MODEL_HIERARCHY,
+    THROTTLE_DELAY_SECONDS, THROTTLE_MODEL, THROTTLE_FALLBACK,
+)
 from app.database import SessionLocal
 from app.models import User
 
@@ -84,7 +87,7 @@ async def _route_via_device(mac: str, body: dict, streaming: bool = True):
     The device runs the request through its local ClawbotCore (with system tools),
     then sends back the response via chat_done.
     If streaming=True: returns SSE stream to browser.
-    If streaming=False: waits for chat_done and returns OpenAI JSON (for picoclaw / ClawbotCore).
+    If streaming=False: waits for chat_done and returns OpenAI JSON (for ClawbotCore).
     """
     from app.routers.ws import manager  # lazy import — avoids circular at module load
 
@@ -186,11 +189,33 @@ def _reset_daily_tokens_if_needed(user: User, db: Session):
 
 
 def _check_and_record_tokens(user: User, tokens_used: int, db: Session):
-    limit = PLAN_LIMITS.get(user.plan, PLAN_LIMITS["particulier"])["tokens_per_day"]
-    if user.tokens_used_today + tokens_used > limit:
-        raise HTTPException(429, f"Daily token limit reached ({limit} tokens/day for plan '{user.plan}')")
-    user.tokens_used_today += tokens_used
+    """Record token usage. Never blocks — throttling is handled upstream."""
+    user.tokens_used_today = (user.tokens_used_today or 0) + tokens_used
     db.commit()
+
+
+def _apply_throttle_if_needed(user: User, plan_cfg: dict, db: Session) -> dict | None:
+    """If user exceeded quota, enforce delay + return cheapest model override.
+    Returns None if under quota."""
+    limit = plan_cfg["tokens_per_day"]
+    if (user.tokens_used_today or 0) < limit:
+        return None
+
+    # Over quota — enforce minimum delay between requests
+    now = datetime.utcnow()
+    if user.last_throttled_at:
+        elapsed = (now - user.last_throttled_at).total_seconds()
+        if elapsed < THROTTLE_DELAY_SECONDS:
+            time.sleep(THROTTLE_DELAY_SECONDS - elapsed)
+
+    user.last_throttled_at = datetime.utcnow()
+    db.commit()
+
+    # Pick cheapest available model
+    override = THROTTLE_MODEL
+    if not PROVIDER_KEYS.get(override["provider"]):
+        override = THROTTLE_FALLBACK
+    return {"provider": override["provider"], "model": override["model"], "throttled": True}
 
 
 @router.post("/v1/kimi-web-search")
@@ -369,9 +394,9 @@ async def get_agents(authorization: str = Header(...)):
         db.close()
 
 
-@router.post("/v1/picoclaw-agent")
-async def picoclaw_agent(request: Request, authorization: str = Header(...)):
-    """Forward an agent request through the device WebSocket tunnel (picoclaw native agent)."""
+@router.post("/v1/chat/agents")
+async def chat_agents(request: Request, authorization: str = Header(...)):
+    """Forward an agent request through the device WebSocket tunnel."""
     sub_key = authorization.removeprefix("Bearer ").strip()
     db = SessionLocal()
     try:
@@ -379,7 +404,7 @@ async def picoclaw_agent(request: Request, authorization: str = Header(...)):
         if not user:
             raise HTTPException(401, "Invalid or inactive subscription key")
         body = await request.json()
-        body["_endpoint"] = "/v1/picoclaw-agent"  # hint for device routing
+        body["_endpoint"] = "/v1/chat/agents"  # hint for device routing
         from app.routers.ws import manager as _mgr
         device_mac = _mgr.get_online_mac_for_user(user.devices)
         if not device_mac:
@@ -421,36 +446,46 @@ async def chat_completions(request: Request, authorization: str = Header(...)):
         # No device online — fall through to direct LLM call via selected provider.
         # Provider is chosen from PLAN_ROUTING based on user plan.
         # Pi is blind: it never knows which provider/model is actually used.
-        routing = PLAN_ROUTING.get(user.plan, PLAN_ROUTING["free"])
-        selected = next((r for r in routing if PROVIDER_KEYS.get(r["provider"])), routing[0])
-        provider = selected["provider"]
+
+        # Throttle check — if over quota, enforce delay + force cheapest model
+        throttle = _apply_throttle_if_needed(user, plan_cfg, db)
+        if throttle:
+            provider = throttle["provider"]
+            body["model"] = throttle["model"]
+            print(f"[THROTTLE] user={user.email} plan={user.plan} → {provider}/{body['model']} (quota exceeded)")
+        else:
+            routing = PLAN_ROUTING.get(user.plan, PLAN_ROUTING["free"])
+            selected = next((r for r in routing if PROVIDER_KEYS.get(r["provider"])), routing[0])
+            provider = selected["provider"]
 
         # Respect user-requested model if within plan ceiling or a budget provider model.
-        requested_model = body.get("model", "")
-        ceiling = plan_cfg["model_ceiling"]
-        # All known Qwen model IDs (DashScope) — always allowed as budget provider
-        _QWEN_MODELS = {m["id"] for m in _PROVIDER_MODELS.get("dashscope", [])}
-        if (requested_model
-                and requested_model == "kimi-for-coding"
-                and PROVIDER_KEYS.get("moonshot")):
-            # KimiCode model explicitly requested — always allowed (budget provider)
-            provider = "moonshot"
-            body["model"] = requested_model
-        elif (requested_model
-                and requested_model in _QWEN_MODELS
-                and PROVIDER_KEYS.get("dashscope")):
-            # Qwen model explicitly requested — always allowed (budget provider)
-            provider = "dashscope"
-            body["model"] = requested_model
-        elif (requested_model
-                and requested_model in MODEL_HIERARCHY
-                and MODEL_HIERARCHY.index(requested_model) <= MODEL_HIERARCHY.index(ceiling)
-                and PROVIDER_KEYS.get("anthropic")):
-            # Anthropic model within plan ceiling
-            provider = "anthropic"
-            body["model"] = requested_model
-        else:
-            body["model"] = selected["model"]
+        # Skip model override when throttled — cheapest model is already forced.
+        if not throttle:
+            requested_model = body.get("model", "")
+            ceiling = plan_cfg["model_ceiling"]
+            # All known Qwen model IDs (DashScope) — always allowed as budget provider
+            _QWEN_MODELS = {m["id"] for m in _PROVIDER_MODELS.get("dashscope", [])}
+            if (requested_model
+                    and requested_model == "kimi-for-coding"
+                    and PROVIDER_KEYS.get("moonshot")):
+                # KimiCode model explicitly requested — always allowed (budget provider)
+                provider = "moonshot"
+                body["model"] = requested_model
+            elif (requested_model
+                    and requested_model in _QWEN_MODELS
+                    and PROVIDER_KEYS.get("dashscope")):
+                # Qwen model explicitly requested — always allowed (budget provider)
+                provider = "dashscope"
+                body["model"] = requested_model
+            elif (requested_model
+                    and requested_model in MODEL_HIERARCHY
+                    and MODEL_HIERARCHY.index(requested_model) <= MODEL_HIERARCHY.index(ceiling)
+                    and PROVIDER_KEYS.get("anthropic")):
+                # Anthropic model within plan ceiling
+                provider = "anthropic"
+                body["model"] = requested_model
+            else:
+                body["model"] = selected["model"]
 
         print(f"[LLM] route: user={user.email} plan={user.plan} provider={provider} model={body.get('model')} from_tunnel={body.get('_from_tunnel', False)}")
 
@@ -469,14 +504,13 @@ async def chat_completions(request: Request, authorization: str = Header(...)):
             base_url = PROVIDER_URLS["anthropic"]
 
             if streaming:
-                limit = plan_cfg["tokens_per_day"]
-                if user.tokens_used_today >= limit:
-                    raise HTTPException(429, f"Daily token limit reached ({limit} tokens/day)")
-
                 _payload = payload
                 _upstream_headers = upstream_headers
+                _throttled = bool(throttle)
 
                 def stream_gen():
+                    if _throttled:
+                        yield b'data: {"throttled": true, "notice": "Forfait journalier atteint. Vitesse temporairement reduite."}\n\n'
                     input_tokens = 0
                     output_tokens = 0
                     for attempt in range(2):
@@ -600,14 +634,13 @@ async def chat_completions(request: Request, authorization: str = Header(...)):
             base_url = PROVIDER_URLS[provider]
 
             if streaming:
-                limit = plan_cfg["tokens_per_day"]
-                if user.tokens_used_today >= limit:
-                    raise HTTPException(429, f"Daily token limit reached ({limit} tokens/day)")
-
                 _payload = payload
                 _upstream_headers = upstream_headers
+                _throttled2 = bool(throttle)
 
                 def stream_gen():  # noqa: F811
+                    if _throttled2:
+                        yield b'data: {"throttled": true, "notice": "Forfait journalier atteint. Vitesse temporairement reduite."}\n\n'
                     input_tokens = 0
                     output_tokens = 0
                     for attempt in range(2):
