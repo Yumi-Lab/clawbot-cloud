@@ -151,7 +151,7 @@ PLAN_ROUTING = {
 
 # ── Throttle settings ────────────────────────────────────────────────────────
 # When user exceeds daily quota: degrade speed, never cut service (telecom model).
-THROTTLE_DELAY_SECONDS = 60
+THROTTLE_DELAY_SECONDS = 20
 THROTTLE_MODEL = {"provider": "moonshot", "model": "kimi-for-coding"}
 THROTTLE_FALLBACK = {"provider": "dashscope", "model": "qwen3.5-flash"}
 
