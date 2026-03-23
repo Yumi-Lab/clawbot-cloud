@@ -44,11 +44,18 @@ chown -R "${SERVICE_USER}:${SERVICE_USER}" "${DATA_DIR}" "${INSTALL_DIR}"
 ENV_FILE="${INSTALL_DIR}/.env"
 if [[ ! -f "${ENV_FILE}" ]]; then
     SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
-    echo "==> Creating .env — YOU MUST fill in ANTHROPIC_API_KEY"
+    echo "==> Creating .env — fill in at least MOONSHOT_API_KEY"
     cat > "${ENV_FILE}" << EOF
 DATABASE_URL=sqlite:///${DATA_DIR}/db.sqlite3
 SECRET_KEY=${SECRET_KEY}
-ANTHROPIC_API_KEY=sk-ant-REPLACE_ME
+ADMIN_SECRET=$(python3 -c "import secrets; print(secrets.token_hex(16))")
+
+# LLM providers — at least one key required (Moonshot recommended)
+MOONSHOT_API_KEY=sk-kimi-REPLACE_ME
+DASHSCOPE_API_KEY=
+ANTHROPIC_API_KEY=
+DEEPSEEK_API_KEY=
+OPENAI_API_KEY=
 EOF
     chown "${SERVICE_USER}:${SERVICE_USER}" "${ENV_FILE}"
     chmod 600 "${ENV_FILE}"
@@ -101,7 +108,7 @@ nginx -t && systemctl reload nginx
 echo ""
 echo "✓ ClawbotCloud installed!"
 echo ""
-echo "  Edit your Anthropic key:  nano ${ENV_FILE}"
+echo "  Edit your API keys:       nano ${ENV_FILE}"
 echo "  Then restart:             systemctl restart clawbot-cloud"
 echo ""
 echo "  API running at:  http://$(curl -sf ifconfig.me 2>/dev/null || echo '<server-ip>')"
