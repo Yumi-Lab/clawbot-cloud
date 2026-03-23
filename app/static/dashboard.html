@@ -280,7 +280,7 @@
         <button class="btn-sm" id="btn-reveal" onclick="toggleKey()">Afficher</button>
         <button class="btn-sm" id="btn-copy" onclick="copyKey()">Copier</button>
       </div>
-      <div style="font-size:10px;color:var(--text-muted)">Envoyez cette clé à PicoClaw pour accéder au LLM</div>
+      <div style="font-size:10px;color:var(--text-muted)">Utilisez cette clé pour connecter votre appareil au LLM</div>
     </div>
 
     <!-- Token usage -->
@@ -322,12 +322,11 @@
           <th>Firmware</th>
           <th>Adresse IP</th>
           <th>Dernière vue</th>
-          <th>PicoClaw</th>
           <th>Core</th>
         </tr>
       </thead>
       <tbody id="devices-tbody">
-        <tr class="empty-row"><td colspan="7">Chargement des appareils...</td></tr>
+        <tr class="empty-row"><td colspan="6">Chargement des appareils...</td></tr>
       </tbody>
     </table>
   </div>
@@ -364,8 +363,8 @@
   }
   applyTheme(localStorage.getItem('clawbot_theme') || 'dark');
 
-  const token = localStorage.getItem('clawbot_token');
-  const subKey = localStorage.getItem('clawbot_subkey');
+  const token = sessionStorage.getItem('clawbot_token');
+  const subKey = sessionStorage.getItem('clawbot_subkey');
   if (!token) window.location.href = '/';
 
   let userInfo = null;
@@ -470,7 +469,7 @@
   async function renderDevices(devices) {
     const tbody = document.getElementById('devices-tbody');
     if (!devices.length) {
-      tbody.innerHTML = '<tr class="empty-row"><td colspan="7">Aucun appareil associé. Cliquez sur "+ Associer un appareil".</td></tr>';
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="6">Aucun appareil associé. Cliquez sur "+ Associer un appareil".</td></tr>';
       return;
     }
     const rows = await Promise.all(devices.map(async d => {
@@ -488,7 +487,6 @@
         <td>${d.firmware || '—'}</td>
         <td>${d.last_ip || '—'}</td>
         <td style="font-size:11px">${seen}</td>
-        <td>${dot(d.picoclaw_status)}</td>
         <td>${dot(d.core_status)}</td>
       </tr>`;
     }));
@@ -612,7 +610,7 @@
     container.appendChild(wrap);
     container.scrollTop = container.scrollHeight;
 
-    const planModel = userInfo?.model || 'claude-haiku-4-5-20251001';
+    const planModel = userInfo?.model || 'kimi-for-coding';
     let fullText = '';
     try {
       const r = await fetch('/v1/chat/completions', {
@@ -655,7 +653,8 @@
   }
 
   function logout() {
-    localStorage.clear();
+    sessionStorage.clear();
+    localStorage.removeItem('oj_key');
     window.location.href = '/';
   }
 

@@ -67,7 +67,6 @@ def heartbeat(req: HeartbeatRequest, db: Session = Depends(get_db)):
     device.last_ip = req.ip or device.last_ip
     device.last_seen_at = datetime.utcnow()
     if req.services:
-        device.picoclaw_status = req.services.get("picoclaw")
         device.core_status = req.services.get("clawbot_core")
 
     db.commit()
@@ -105,7 +104,7 @@ def provision(device_id: str, db: Session = Depends(get_db)):
         provisioned=True,
         config={
             "subscription_key": user.sub_key,
-            "model": plan_cfg["model"],
+            "model": plan_cfg.get("model_ceiling", "kimi-for-coding"),
             "base_url": "https://clawbot-api.yumi-lab.com/v1",
         },
         modules=[],  # future: push modules from user's plan
@@ -186,7 +185,6 @@ def list_devices(db: Session = Depends(get_db), user: User = Depends(current_use
                 "last_ip": d.last_ip,
                 "last_seen_at": d.last_seen_at.isoformat() if d.last_seen_at else None,
                 "provisioned": d.provisioned,
-                "picoclaw_status": d.picoclaw_status,
                 "core_status": d.core_status,
             }
             for d in devices

@@ -117,7 +117,6 @@ def list_devices(db: Session = Depends(get_db), _=Depends(require_admin)):
             "last_ip": d.last_ip,
             "last_seen_at": d.last_seen_at.isoformat() if d.last_seen_at else None,
             "provisioned": d.provisioned,
-            "picoclaw_status": d.picoclaw_status,
             "core_status": d.core_status,
         })
     return {"devices": result}

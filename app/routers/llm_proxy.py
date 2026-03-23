@@ -774,7 +774,7 @@ def _openai_to_anthropic(body: dict) -> dict:
                 text = content if isinstance(content, str) else " ".join(
                     b.get("text", "") for b in content if b.get("type") == "text"
                 )
-                if text:
+                if text and text.strip():
                     blocks.append({"type": "text", "text": text})
             if tool_calls:
                 for tc in tool_calls:
@@ -790,7 +790,9 @@ def _openai_to_anthropic(body: dict) -> dict:
                         "input": inp,
                     })
             if not blocks:
-                blocks = [{"type": "text", "text": ""}]
+                # Skip empty assistant messages — Anthropic rejects empty text blocks
+                i += 1
+                continue
             anthropic_msgs.append({"role": "assistant", "content": blocks})
             i += 1
 
@@ -799,7 +801,7 @@ def _openai_to_anthropic(body: dict) -> dict:
             tool_results: list[dict] = []
             while i < len(filtered) and filtered[i].get("role") == "tool":
                 m = filtered[i]
-                tc_content = m.get("content", "")
+                tc_content = m.get("content") or "(empty)"
                 content_blocks = (
                     [{"type": "text", "text": tc_content}]
                     if isinstance(tc_content, str)
@@ -815,13 +817,18 @@ def _openai_to_anthropic(body: dict) -> dict:
 
         else:  # user
             if isinstance(content, str):
-                anthropic_msgs.append({"role": "user", "content": content})
+                anthropic_msgs.append({"role": "user", "content": content or "..."})
             elif isinstance(content, list):
-                blocks = [{"type": "text", "text": b.get("text", "")} for b in content if b.get("type") == "text"]
+                blocks = [{"type": "text", "text": b.get("text", "") or "..."} for b in content if b.get("type") == "text"]
                 anthropic_msgs.append({"role": "user", "content": blocks or content})
             else:
-                anthropic_msgs.append({"role": "user", "content": str(content or "")})
+                anthropic_msgs.append({"role": "user", "content": str(content) if content else "..."})
             i += 1
+
+    # Prefill guard — Anthropic rejects conversations ending with assistant message
+    if anthropic_msgs and anthropic_msgs[-1].get("role") == "assistant":
+        logger.warning("Prefill guard: messages end with assistant, appending [continue]")
+        anthropic_msgs.append({"role": "user", "content": "[continue]"})
 
     result["messages"] = anthropic_msgs
 

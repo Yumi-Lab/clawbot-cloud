@@ -124,7 +124,7 @@ def _build_config_payload(user: User) -> dict:
     return {
         "type": "config",
         "subscription_key": user.sub_key,
-        "model": plan_cfg.get("model_ceiling", "claude-haiku-4-5-20251001"),
+        "model": plan_cfg.get("model_ceiling", "kimi-for-coding"),
         "base_url": "https://clawbot-api.yumi-lab.com/v1",
     }
 
@@ -201,7 +201,6 @@ async def device_ws(websocket: WebSocket, mac: str | None = None):
                 device.last_seen_at = datetime.utcnow()
                 services = data.get("services", {})
                 if services:
-                    device.picoclaw_status = services.get("picoclaw")
                     device.core_status = services.get("clawbot_core")
                 db.commit()
 

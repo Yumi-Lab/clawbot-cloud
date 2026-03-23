@@ -327,12 +327,11 @@
                 <th>IP</th>
                 <th>Dernière vue</th>
                 <th>Provisionné</th>
-                <th>PicoClaw</th>
                 <th>Core</th>
               </tr>
             </thead>
             <tbody id="devices-tbody">
-              <tr class="empty-row"><td colspan="9">Chargement...</td></tr>
+              <tr class="empty-row"><td colspan="8">Chargement...</td></tr>
             </tbody>
           </table>
         </div>
@@ -513,7 +512,7 @@
     const tbody = document.getElementById('devices-tbody');
     document.getElementById('device-count').textContent = devices.length + ' appareil' + (devices.length !== 1 ? 's' : '');
     if (!devices.length) {
-      tbody.innerHTML = '<tr class="empty-row"><td colspan="9">Aucun appareil</td></tr>';
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="8">Aucun appareil</td></tr>';
       return;
     }
     tbody.innerHTML = devices.map(d => {
@@ -533,7 +532,6 @@
         <td>${d.last_ip || '—'}</td>
         <td style="font-size:11px">${seen}</td>
         <td><span class="badge ${d.provisioned ? 'ok' : 'ko'}">${d.provisioned ? 'OUI' : 'NON'}</span></td>
-        <td>${dot(d.picoclaw_status)}</td>
         <td>${dot(d.core_status)}</td>
       </tr>`;
     }).join('');

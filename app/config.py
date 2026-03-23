@@ -11,11 +11,42 @@ Legacy DB values: "particulier" → starter
 import os
 
 # Model hierarchy (ascending capability/cost) — used for ceiling enforcement
+# Maps every known model to a tier (0 = cheapest, 2 = most capable).
+# Unknown models default to tier 0 (safe: never exceeds ceiling).
 MODEL_HIERARCHY = [
     "claude-haiku-4-5-20251001",
     "claude-sonnet-4-6",
     "claude-opus-4-6",
 ]
+
+MODEL_TIER = {
+    # Tier 0 — economy / flash
+    "qwen3.5-flash":           0,
+    "kimi-for-coding":         0,
+    "claude-haiku-4-5-20251001": 0,
+    # Tier 1 — mid
+    "qwen3.5-plus":            1,
+    "qwen3-max":               1,
+    "qwen3-coder-plus":        1,
+    "deepseek-chat":           1,
+    "kimi-code-2.5":           1,
+    "claude-sonnet-4-6":       1,
+    # Tier 2 — top
+    "claude-opus-4-6":         2,
+}
+
+# Ceiling per plan expressed as max tier
+PLAN_CEILING_TIER = {
+    "free":        0,
+    "starter":     1,
+    "plus":        1,
+    "geek":        2,
+    "pro_starter": 2,
+    "pro":         2,
+    "pro_plus":    2,
+    "business":    2,
+    "particulier": 1,
+}
 
 # ── Plan definitions ──────────────────────────────────────────────────────────
 # tokens_per_day  : soft quota — beyond this, throttle kicks in (never hard cut)
@@ -122,6 +153,7 @@ PROVIDER_URLS = {
 }
 
 # Ordered list per plan — first provider with a key available wins.
+# RULE: moonshot/dashscope ALWAYS first, anthropic ALWAYS last (fallback only).
 PLAN_ROUTING = {
     "free": [
         {"provider": "dashscope",  "model": "qwen3.5-flash"},
@@ -129,24 +161,46 @@ PLAN_ROUTING = {
         {"provider": "anthropic",  "model": "claude-haiku-4-5-20251001"},
     ],
     "starter": [
+        {"provider": "moonshot",   "model": "kimi-for-coding"},
         {"provider": "dashscope",  "model": "qwen3.5-plus"},
         {"provider": "anthropic",  "model": "claude-sonnet-4-6"},
     ],
-    "plus":        [{"provider": "anthropic", "model": "claude-sonnet-4-6"},
-                    {"provider": "dashscope", "model": "qwen3-max"}],
-    "geek":        [{"provider": "anthropic", "model": "claude-opus-4-6"},
-                    {"provider": "dashscope", "model": "qwen3-coder-plus"}],
-    "pro_starter": [{"provider": "anthropic", "model": "claude-opus-4-6"},
-                    {"provider": "dashscope", "model": "qwen3-max"}],
-    "pro":         [{"provider": "anthropic", "model": "claude-opus-4-6"},
-                    {"provider": "deepseek",  "model": "deepseek-chat"}],
-    "pro_plus":    [{"provider": "anthropic", "model": "claude-opus-4-6"},
-                    {"provider": "deepseek",  "model": "deepseek-chat"}],
-    "business":    [{"provider": "anthropic", "model": "claude-opus-4-6"},
-                    {"provider": "deepseek",  "model": "deepseek-chat"}],
+    "plus": [
+        {"provider": "moonshot",   "model": "kimi-for-coding"},
+        {"provider": "dashscope",  "model": "qwen3-max"},
+        {"provider": "anthropic",  "model": "claude-sonnet-4-6"},
+    ],
+    "geek": [
+        {"provider": "moonshot",   "model": "kimi-for-coding"},
+        {"provider": "dashscope",  "model": "qwen3-coder-plus"},
+        {"provider": "anthropic",  "model": "claude-opus-4-6"},
+    ],
+    "pro_starter": [
+        {"provider": "moonshot",   "model": "kimi-for-coding"},
+        {"provider": "dashscope",  "model": "qwen3-max"},
+        {"provider": "anthropic",  "model": "claude-opus-4-6"},
+    ],
+    "pro": [
+        {"provider": "moonshot",   "model": "kimi-for-coding"},
+        {"provider": "deepseek",   "model": "deepseek-chat"},
+        {"provider": "anthropic",  "model": "claude-opus-4-6"},
+    ],
+    "pro_plus": [
+        {"provider": "moonshot",   "model": "kimi-for-coding"},
+        {"provider": "deepseek",   "model": "deepseek-chat"},
+        {"provider": "anthropic",  "model": "claude-opus-4-6"},
+    ],
+    "business": [
+        {"provider": "moonshot",   "model": "kimi-for-coding"},
+        {"provider": "deepseek",   "model": "deepseek-chat"},
+        {"provider": "anthropic",  "model": "claude-opus-4-6"},
+    ],
     # Legacy
-    "particulier": [{"provider": "anthropic", "model": "claude-sonnet-4-6"},
-                    {"provider": "dashscope", "model": "qwen3.5-plus"}],
+    "particulier": [
+        {"provider": "moonshot",   "model": "kimi-for-coding"},
+        {"provider": "dashscope",  "model": "qwen3.5-plus"},
+        {"provider": "anthropic",  "model": "claude-sonnet-4-6"},
+    ],
 }
 
 # ── Throttle settings ────────────────────────────────────────────────────────

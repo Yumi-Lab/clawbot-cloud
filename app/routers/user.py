@@ -23,6 +23,6 @@ def me(user: User = Depends(current_user), db: Session = Depends(get_db)):
         "sub_active": user.sub_active,
         "tokens_used_today": user.tokens_used_today or 0,
         "tokens_per_day": plan_cfg["tokens_per_day"],
-        "model": plan_cfg.get("model_ceiling", plan_cfg.get("model", "claude-haiku-4-5-20251001")),
+        "model": plan_cfg.get("model_ceiling", "kimi-for-coding"),
         "created_at": user.created_at.isoformat() if user.created_at else None,
     }

@@ -272,7 +272,8 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
     </button>
     <span class="tb-title" id="tb-title">New Chat</span>
     <div class="mdl-pills">
-      <button class="mdl-pill haiku on" id="mp-haiku" onclick="setModel('claude-haiku-4-5-20251001')" title="Haiku 4.5 — fastest · $0.25/$1.25 per M">Haiku</button>
+      <button class="mdl-pill kimi on" id="mp-kimi" onclick="setModel('kimi-for-coding')" title="Kimi — fast coding AI">Kimi</button>
+      <button class="mdl-pill haiku" id="mp-haiku" onclick="setModel('claude-haiku-4-5-20251001')" title="Haiku 4.5 — fastest · $0.25/$1.25 per M">Haiku</button>
       <button class="mdl-pill sonnet" id="mp-sonnet" onclick="setModel('claude-sonnet-4-6')" title="Sonnet 4.6 — balanced · $3/$15 per M">Sonnet</button>
       <button class="mdl-pill opus" id="mp-opus" onclick="setModel('claude-opus-4-6')" title="Opus 4.6 — most powerful · $15/$75 per M">Opus</button>
     </div>
@@ -305,7 +306,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
         </div>
         <div class="ft-bar">
           <button class="chat-mode-btn active" id="mode-core" onclick="setChatMode('core')" title="ClawbotCore orchestrator — system tools (bash, python, files...)">Core</button>
-          <button class="chat-mode-btn" id="mode-agent" onclick="setChatMode('agent')" title="Picoclaw native agent — 14 built-in tools">Agent</button>
+          <button class="chat-mode-btn" id="mode-agent" onclick="setChatMode('agent')" title="ClawbotCore agent — 14 built-in tools">Agent</button>
           <div class="mode-sep"></div>
           <span style="font-family:var(--fmo);font-size:.55rem;color:var(--td)">↵ send · ⇧↵ newline</span>
           <div class="ctx-bar" style="margin-left:auto">
@@ -402,6 +403,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 // ── Config ──────────────────────────────────────────────────────────────────
 const CLOUD_URL = 'https://clawbot-api.yumi-lab.com';
 const MODELS = {
+  'kimi-for-coding': 'kimi',
   'claude-haiku-4-5-20251001': 'haiku',
   'claude-sonnet-4-6': 'sonnet',
   'claude-opus-4-6': 'opus',
@@ -409,7 +411,7 @@ const MODELS = {
 
 // ── State ────────────────────────────────────────────────────────────────────
 let apiKey = localStorage.getItem("oj_key") || localStorage.getItem("clawbot_subkey") || "";
-let currentModel = localStorage.getItem('oj_model') || 'claude-haiku-4-5-20251001';
+let currentModel = localStorage.getItem('oj_model') || 'kimi-for-coding';
 let sessions = JSON.parse(localStorage.getItem('oj_sessions') || '[]');
 let currentId = null;
 let history = []; // display history [{role, content}]
@@ -566,7 +568,7 @@ async function setChatMode(m) {
 
 const MODE_LABELS = {
   core: 'ClawbotCore — orchestrateur système (outils bash, python, lecture/écriture fichiers)',
-  agent: 'Picoclaw — agent natif Go (14 outils intégrés, sessions, mémoire)',
+  agent: 'ClawbotCore — agent natif (14 outils intégrés, sessions, mémoire)',
 };
 
 async function compactContext(fromMode, toMode) {
@@ -719,7 +721,7 @@ function finalizeTracePanel(wrap, totalCount) {
 function setModel(m) {
   currentModel = m;
   localStorage.setItem('oj_model', m);
-  ['haiku','sonnet','opus'].forEach(k => {
+  Object.values(MODELS).forEach(k => {
     const el = document.getElementById('mp-' + k);
     if (el) el.classList.toggle('on', MODELS[m] === k);
   });
@@ -965,7 +967,7 @@ async function sendMsg() {
 
   const isAgent = chatMode === 'agent';
   const ep = isAgent
-    ? CLOUD_URL + '/v1/picoclaw-agent'
+    ? CLOUD_URL + '/v1/chat/agents'
     : CLOUD_URL + '/v1/chat/completions';
 
   let full = '';
@@ -1043,7 +1045,7 @@ async function sendMsg() {
             scrollBottom();
             curEvent = null;
           } else if (curEvent === 'trace') {
-            curEvent = null; // legacy picoclaw trace — ignore for now
+            curEvent = null; // legacy trace — ignore for now
           } else {
             // Standard OpenAI delta (Core direct / fallback)
             const delta = d.choices?.[0]?.delta?.content ?? null;
