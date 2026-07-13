@@ -218,6 +218,62 @@ def _apply_throttle_if_needed(user: User, plan_cfg: dict, db: Session) -> dict |
     return {"provider": override["provider"], "model": override["model"], "throttled": True}
 
 
+def _kimi_search_sync(moonshot_url: str, moonshot_key: str, query: str, max_results: int) -> str:
+    """Blocking Kimi web search — runs in thread via asyncio.to_thread()."""
+    def _call(messages, extra_params=None):
+        payload_dict = {
+            "model": "kimi-for-coding",
+            "stream": False,
+            "max_tokens": 3000,
+            "messages": messages,
+            "tools": [{"type": "builtin_function", "function": {"name": "$web_search"}}],
+        }
+        if extra_params:
+            payload_dict.update(extra_params)
+        payload = json.dumps(payload_dict).encode()
+        req = urllib.request.Request(
+            f"{moonshot_url}/chat/completions", data=payload,
+            headers={"Content-Type": "application/json",
+                     "Authorization": f"Bearer {moonshot_key}",
+                     "User-Agent": "claude-code/1.0"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return json.loads(r.read())
+
+    _prompt = (
+        f"Search the web for: {query}\n"
+        f"Read the top {max_results} pages and provide a DETAILED FACTUAL SUMMARY of what you find. "
+        "Include specific data, numbers, dates, facts — not just links. "
+        "If the query is about weather, prices, events, or any time-sensitive topic, extract the actual current data. "
+        "Format: a clear summary paragraph, then bullet points with key facts. Include source URLs at the end."
+    )
+    msgs = [{"role": "user", "content": _prompt}]
+    r1 = _call(msgs)
+
+    choice = r1.get("choices", [{}])[0]
+    msg1 = choice.get("message", {})
+    tool_calls = msg1.get("tool_calls", [])
+    if tool_calls:
+        assistant_msg = {
+            "role": "assistant",
+            "content": msg1.get("content") or "",
+            "tool_calls": tool_calls,
+        }
+        reasoning = msg1.get("reasoning_content", "")
+        if reasoning:
+            assistant_msg["reasoning_content"] = reasoning
+            r2_extra = None
+        else:
+            r2_extra = {"thinking": {"type": "disabled"}}
+        msgs.append(assistant_msg)
+        for tc in tool_calls:
+            msgs.append({"role": "tool", "tool_call_id": tc.get("id", ""), "content": ""})
+        r2 = _call(msgs, extra_params=r2_extra)
+        return r2.get("choices", [{}])[0].get("message", {}).get("content", "")
+    return msg1.get("content", "")
+
+
 @router.post("/v1/kimi-web-search")
 async def kimi_web_search(request: Request, authorization: str = Header(...)):
     """Proxy Kimi $web_search builtin — Pi calls this with its sub_key, cloud uses Moonshot key."""
@@ -237,66 +293,48 @@ async def kimi_web_search(request: Request, authorization: str = Header(...)):
             raise HTTPException(503, "Moonshot API not configured on this server")
         moonshot_url = PROVIDER_URLS["moonshot"]
 
-        def _call(messages, extra_params=None):
-            import json as _json
-            payload_dict = {
-                "model": "kimi-for-coding",
-                "stream": False,
-                "max_tokens": 1500,
-                "messages": messages,
-                "tools": [{"type": "builtin_function", "function": {"name": "$web_search"}}],
-            }
-            if extra_params:
-                payload_dict.update(extra_params)
-            payload = _json.dumps(payload_dict).encode()
-            req = urllib.request.Request(
-                f"{moonshot_url}/chat/completions", data=payload,
-                headers={"Content-Type": "application/json",
-                         "Authorization": f"Bearer {moonshot_key}",
-                         "User-Agent": "claude-code/1.0"},
-                method="POST",
-            )
-            with urllib.request.urlopen(req, timeout=60) as r:
-                return _json.loads(r.read())
-
-        msgs = [{"role": "user", "content": f"Search the web for: {query}\nReturn the top {max_results} results as a numbered list: title, URL, brief description."}]
         try:
-            r1 = _call(msgs)
+            content = await asyncio.to_thread(
+                _kimi_search_sync, moonshot_url, moonshot_key, query, max_results
+            )
         except Exception as e:
             raise HTTPException(502, f"Kimi API error: {e}")
-
-        choice = r1.get("choices", [{}])[0]
-        msg1 = choice.get("message", {})
-        tool_calls = msg1.get("tool_calls", [])
-        content = ""
-        if tool_calls:
-            assistant_msg = {
-                "role": "assistant",
-                "content": msg1.get("content") or "",
-                "tool_calls": tool_calls,
-            }
-            reasoning = msg1.get("reasoning_content", "")
-            if reasoning:
-                # Kimi thinking was active — pass reasoning_content in round-2 assistant message
-                assistant_msg["reasoning_content"] = reasoning
-                r2_extra = None
-            else:
-                # Kimi thinking produced nothing — explicitly disable it in round-2 to avoid 400
-                r2_extra = {"thinking": {"type": "disabled"}}
-            msgs.append(assistant_msg)
-            for tc in tool_calls:
-                msgs.append({"role": "tool", "tool_call_id": tc.get("id", ""), "content": ""})
-            try:
-                r2 = _call(msgs, extra_params=r2_extra)
-                content = r2.get("choices", [{}])[0].get("message", {}).get("content", "")
-            except Exception as e:
-                raise HTTPException(502, f"Kimi round-2 error: {e}")
-        else:
-            content = msg1.get("content", "")
 
         return JSONResponse({"result": content, "query": query})
     finally:
         db.close()
+
+
+def _claude_search_sync(base_url: str, api_key: str, query: str, max_results: int) -> str:
+    """Blocking Claude web search — runs in thread via asyncio.to_thread()."""
+    _prompt = (
+        f"Search the web for: {query}\n"
+        f"Read the top {max_results} pages and provide a DETAILED FACTUAL SUMMARY of what you find. "
+        "Include specific data, numbers, dates, facts — not just links. "
+        "If the query is about weather, prices, events, or any time-sensitive topic, extract the actual current data. "
+        "Format: a clear summary paragraph, then bullet points with key facts. Include source URLs at the end."
+    )
+    payload = json.dumps({
+        "model": "claude-haiku-4-5-20251001",
+        "max_tokens": 3000,
+        "messages": [{"role": "user", "content": _prompt}],
+        "tools": [{"type": "web_search_20250305", "name": "web_search"}],
+    }).encode()
+    req = urllib.request.Request(
+        f"{base_url}/messages",
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "anthropic-beta": "web-search-2025-03-05",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=30) as r:
+        result = json.loads(r.read())
+    parts = [b.get("text", "") for b in result.get("content", []) if b.get("type") == "text"]
+    return "\n".join(parts).strip()
 
 
 @router.post("/v1/claude-web-search")
@@ -316,34 +354,14 @@ async def claude_web_search(request: Request, authorization: str = Header(...)):
         if not ANTHROPIC_API_KEY:
             raise HTTPException(503, "Anthropic API not configured on this server")
 
-        payload = json.dumps({
-            "model": "claude-haiku-4-5-20251001",
-            "max_tokens": 1500,
-            "messages": [{"role": "user", "content": f"Search the web for: {query}\nReturn the top {max_results} results as a numbered list: title, URL, brief description."}],
-            "tools": [{"type": "web_search_20250305", "name": "web_search"}],
-        }).encode()
-        req = urllib.request.Request(
-            f"{ANTHROPIC_BASE_URL}/messages",
-            data=payload,
-            headers={
-                "Content-Type": "application/json",
-                "x-api-key": ANTHROPIC_API_KEY,
-                "anthropic-version": "2023-06-01",
-                "anthropic-beta": "web-search-2025-03-05",
-            },
-            method="POST",
-        )
         try:
-            with urllib.request.urlopen(req, timeout=30) as r:
-                result = json.loads(r.read())
+            content = await asyncio.to_thread(
+                _claude_search_sync, ANTHROPIC_BASE_URL, ANTHROPIC_API_KEY, query, max_results
+            )
         except Exception as e:
             raise HTTPException(502, f"Claude API error: {e}")
 
-        parts = [b.get("text", "") for b in result.get("content", []) if b.get("type") == "text"]
-        content = "\n".join(parts).strip()
-        if content:
-            return JSONResponse({"result": content, "query": query})
-        return JSONResponse({"result": "", "query": query})
+        return JSONResponse({"result": content or "", "query": query})
     finally:
         db.close()
 
